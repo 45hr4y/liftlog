@@ -644,7 +644,9 @@ function ProgressPage({data}:any){
   const {settings,exercises,subtypes,workouts,sets}=data;
   const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);
   const [sid,setSid]=useState<number|undefined>();
-  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+  const filtered = sets
+  .filter((s: WorkoutSet) => s.exerciseId === eid && (!sid || s.subtypeId === sid))
+  .sort((a: WorkoutSet, b: WorkoutSet) => a.createdAt.localeCompare(b.createdAt));
   const recent = filtered.slice(-12);
   const maxWeight = Math.max(...recent.map((s:WorkoutSet)=>convert(s.weight,s.unit,settings.unit)),1);
   const maxVol = Math.max(...recent.map((s:WorkoutSet)=>volumeKg(s)),1);
