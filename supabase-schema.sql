@@ -1,1 +1,1 @@
--- Supabase removed in LiftLog v11. Use JSON backups and local restore points.
+-- Supabase removed in LiftLog v11.1. Use JSON backups and local restore points.

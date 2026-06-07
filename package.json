@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v11-local-backups",
-  "version": "11.0.0",
+  "name": "liftlog-v11-1-build-fixed",
+  "version": "11.1.0",
   "private": true,
   "type": "module",
   "scripts": {

@@ -129,3 +129,8 @@ Recommended workflow:
 1. Export JSON Backup weekly.
 2. Save the file to iCloud Drive, Google Drive, OneDrive, or email.
 3. Import that JSON on another device if needed.
+
+
+## v11.1 Build Fix
+
+Fixed remaining TypeScript build errors after removing Supabase/cloud sync.
