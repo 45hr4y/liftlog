@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Dexie, { Table } from 'dexie';
+import { createClient } from '@supabase/supabase-js';
 import { Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2 } from 'lucide-react';
 
 type Unit = 'kg' | 'lb';
@@ -9,7 +10,7 @@ type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 
 type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
-type CloudConfig = { id: 'cloud'; supabaseUrl?: string; supabaseAnonKey?: string; syncEnabled: boolean; lastSync?: string };
+type CloudConfig = { id: 'cloud'; supabaseUrl?: string; supabaseAnonKey?: string; syncKey?: string; syncEnabled: boolean; lastSync?: string };
 type Exercise = { id?: number; name: string; muscle: string; equipment: string; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
 type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
@@ -28,7 +29,7 @@ class LiftDB extends Dexie {
   sets!: Table<WorkoutSet, number>;
   cloud!: Table<CloudConfig, string>;
   constructor() {
-    super('liftlog_v9_working_navigation_db');
+    super('liftlog_v10_supabase_sync_db');
     this.version(1).stores({
       settings: 'id',
       exercises: '++id,name,muscle,equipment',
@@ -127,7 +128,7 @@ const colours = ['#7c3aed','#2563eb','#16a34a','#dc2626','#ea580c','#0891b2','#d
 
 async function seed() {
   if (!await db.settings.get('settings')) await db.settings.put({ id:'settings', unit:'kg', theme:'light' });
-  if (!await db.cloud.get('cloud')) await db.cloud.put({ id:'cloud', syncEnabled:false });
+  if (!await db.cloud.get('cloud')) await db.cloud.put({ id:'cloud', syncEnabled:false, syncKey:'' });
   if (await db.exercises.count()) return;
   const t = now();
   const ids = await db.exercises.bulkAdd([
@@ -595,7 +596,7 @@ function MorePage({data}:any){
 function SettingsPage({data}:any){const {settings,refresh}=data; 
   async function exportData(){
     const payload={settings:await db.settings.toArray(),cloud:await db.cloud.toArray(),exercises:await db.exercises.toArray(),subtypes:await db.subtypes.toArray(),routines:await db.routines.toArray(),routineExercises:await db.routineExercises.toArray(),workouts:await db.workouts.toArray(),sets:await db.sets.toArray()}; 
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-v9-export.json'; a.click()
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-v10-export.json'; a.click()
   } 
   async function importData(file: File | undefined){
     if(!file) return;
@@ -619,24 +620,160 @@ function SettingsPage({data}:any){const {settings,refresh}=data;
   </section>
 }
 
+
+async function buildLiftLogPayload() {
+  return {
+    exportedAt: new Date().toISOString(),
+    app: 'LiftLog',
+    version: 10,
+    settings: await db.settings.toArray(),
+    exercises: await db.exercises.toArray(),
+    subtypes: await db.subtypes.toArray(),
+    routines: await db.routines.toArray(),
+    routineExercises: await db.routineExercises.toArray(),
+    workouts: await db.workouts.toArray(),
+    sets: await db.sets.toArray()
+  };
+}
+
+async function replaceLocalDataFromPayload(payload:any) {
+  if (!payload) throw new Error('No payload found.');
+  await db.transaction('rw', db.settings, db.exercises, db.subtypes, db.routines, db.routineExercises, db.workouts, db.sets, async () => {
+    await db.settings.clear();
+    await db.exercises.clear();
+    await db.subtypes.clear();
+    await db.routines.clear();
+    await db.routineExercises.clear();
+    await db.workouts.clear();
+    await db.sets.clear();
+
+    if (payload.settings?.length) await db.settings.bulkPut(payload.settings);
+    else await db.settings.put({id:'settings',unit:'kg',theme:'light'});
+
+    if (payload.exercises?.length) await db.exercises.bulkPut(payload.exercises);
+    if (payload.subtypes?.length) await db.subtypes.bulkPut(payload.subtypes);
+    if (payload.routines?.length) await db.routines.bulkPut(payload.routines);
+    if (payload.routineExercises?.length) await db.routineExercises.bulkPut(payload.routineExercises);
+    if (payload.workouts?.length) await db.workouts.bulkPut(payload.workouts);
+    if (payload.sets?.length) await db.sets.bulkPut(payload.sets);
+  });
+}
+
+async function syncKeyHash(syncKey:string) {
+  const clean = syncKey.trim();
+  if (!clean) throw new Error('Enter a private sync code first.');
+  const data = new TextEncoder().encode(clean);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function makeSupabaseClient(url:string|undefined, key:string|undefined) {
+  if (!url || !key) throw new Error('Enter Supabase URL and anon key first.');
+  return createClient(url, key);
+}
+
+async function uploadLiftLogToCloud(cloud:CloudConfig) {
+  const client = makeSupabaseClient(cloud.supabaseUrl, cloud.supabaseAnonKey);
+  const keyHash = await syncKeyHash(cloud.syncKey || '');
+  const payload = await buildLiftLogPayload();
+  const { error } = await client
+    .from('liftlog_sync')
+    .upsert({ sync_key_hash: keyHash, payload, updated_at: new Date().toISOString() }, { onConflict: 'sync_key_hash' });
+  if (error) throw error;
+  return payload;
+}
+
+async function downloadLiftLogFromCloud(cloud:CloudConfig) {
+  const client = makeSupabaseClient(cloud.supabaseUrl, cloud.supabaseAnonKey);
+  const keyHash = await syncKeyHash(cloud.syncKey || '');
+  const { data, error } = await client
+    .from('liftlog_sync')
+    .select('payload, updated_at')
+    .eq('sync_key_hash', keyHash)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.payload) throw new Error('No cloud backup found for this sync code.');
+  await replaceLocalDataFromPayload(data.payload);
+  return data;
+}
+
 function BackupPage({data}:any){
   const {cloud,refresh}=data;
   const [url,setUrl]=useState(cloud.supabaseUrl||'');
   const [key,setKey]=useState(cloud.supabaseAnonKey||'');
+  const [syncKey,setSyncKey]=useState(cloud.syncKey||'');
   const [enabled,setEnabled]=useState(Boolean(cloud.syncEnabled));
+  const [status,setStatus]=useState('');
+  const [busy,setBusy]=useState(false);
+
   async function save(){
-    await db.cloud.put({id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncEnabled:enabled,lastSync:cloud.lastSync});
+    await db.cloud.put({id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:cloud.lastSync});
     refresh();
-    alert('Cloud settings saved. Schema/setup files are included. Full row-level sync is the next activation step once your Supabase project is created.');
+    setStatus('Cloud settings saved.');
   }
-  async function markSync(){
-    await db.cloud.put({id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncEnabled:enabled,lastSync:new Date().toISOString()});
-    refresh();
+
+  async function doUpload(){
+    try{
+      setBusy(true);
+      const current = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
+      await db.cloud.put(current);
+      await uploadLiftLogToCloud(current);
+      await db.cloud.put({...current,lastSync:new Date().toISOString()});
+      setStatus('Upload complete. Cloud now matches this device.');
+      refresh();
+    }catch(err:any){
+      setStatus('Upload failed: ' + (err.message || String(err)));
+    }finally{
+      setBusy(false);
+    }
   }
+
+  async function doDownload(){
+    if(!confirm('Download cloud data to this device? This replaces local LiftLog data on this browser.')) return;
+    try{
+      setBusy(true);
+      const current = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
+      await db.cloud.put(current);
+      await downloadLiftLogFromCloud(current);
+      await db.cloud.put({...current,lastSync:new Date().toISOString()});
+      setStatus('Download complete. This device now matches cloud.');
+      refresh();
+    }catch(err:any){
+      setStatus('Download failed: ' + (err.message || String(err)));
+    }finally{
+      setBusy(false);
+    }
+  }
+
   return <section>
-    <Card cls="hero"><h2>Cloud-ready backup</h2><p>Enter your Supabase project details here. The app includes the schema and deployment guide, but sync needs your real project keys.</p></Card>
-    <Card><h3>Supabase settings</h3><input placeholder="Supabase project URL" value={url} onChange={e=>setUrl(e.target.value)}/><input placeholder="Supabase anon public key" value={key} onChange={e=>setKey(e.target.value)}/><label className="checkLine"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)}/> Enable cloud sync flag</label><button className="primary" onClick={save}>Save cloud settings</button><button className="secondary" onClick={markSync}>Mark manual backup checked</button><p className="muted">Last sync/check: {cloud.lastSync ? new Date(cloud.lastSync).toLocaleString() : 'Never'}</p></Card>
-    <Card><h3>Hosting</h3><p className="muted">This app includes Vercel-ready configuration. Upload this project to GitHub, import it into Vercel, then open LiftLog from any device.</p></Card>
+    <Card cls="hero"><h2>Cloud Sync</h2><p>Manual sync for PC ↔ iPhone. Upload from one device, then download on the other.</p></Card>
+
+    <Card>
+      <h3>1. Supabase settings</h3>
+      <input placeholder="Supabase project URL" value={url} onChange={e=>setUrl(e.target.value)}/>
+      <input placeholder="Supabase anon public key" value={key} onChange={e=>setKey(e.target.value)}/>
+      <input placeholder="Private sync code e.g. ashray-liftlog-2026" value={syncKey} onChange={e=>setSyncKey(e.target.value)}/>
+      <label className="checkLine"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)}/> Enable sync on this device</label>
+      <button className="primary" onClick={save} disabled={busy}>Save settings</button>
+      <p className="muted">Use the same URL, anon key and private sync code on your PC and iPhone.</p>
+    </Card>
+
+    <Card>
+      <h3>2. Manual sync</h3>
+      <button className="primary" disabled={busy || !enabled} onClick={doUpload}>Upload this device to cloud</button>
+      <button className="secondary" disabled={busy || !enabled} onClick={doDownload}>Download cloud to this device</button>
+      <p className="muted">Last sync/check: {cloud.lastSync ? new Date(cloud.lastSync).toLocaleString() : 'Never'}</p>
+      {status && <div className="syncStatus">{status}</div>}
+    </Card>
+
+    <Card>
+      <h3>How to use safely</h3>
+      <ol className="steps">
+        <li>On the device with the best/current data, press <strong>Upload this device to cloud</strong>.</li>
+        <li>On your other device, press <strong>Download cloud to this device</strong>.</li>
+        <li>Do not edit both devices separately before syncing, or you may overwrite one side.</li>
+      </ol>
+    </Card>
   </section>
 }
 

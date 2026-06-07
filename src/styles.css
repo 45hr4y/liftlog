@@ -337,3 +337,33 @@ body[data-theme="dark"] .quickActions button{
   .fiveTabs .tab span{font-size:10px}
   .quickActions{grid-template-columns:1fr 1fr 1fr}
 }
+
+
+/* LiftLog v10 manual cloud sync */
+.syncStatus{
+  margin-top:12px;
+  padding:12px;
+  border-radius:16px;
+  background:#ecfeff;
+  color:#155e75;
+  border:1px solid #a5f3fc;
+  font-weight:800;
+}
+body[data-theme="dark"] .syncStatus{
+  background:#164e63;
+  color:#cffafe;
+  border-color:#155e75;
+}
+.steps{
+  margin:0;
+  padding-left:20px;
+  color:#475569;
+}
+.steps li{
+  margin:8px 0;
+}
+body[data-theme="dark"] .steps{color:#cbd5e1}
+button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}

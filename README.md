@@ -1,9 +1,9 @@
-# LiftLog v9 Sleek
+# LiftLog v10 Sleek
 
 This is a clean rebuild of the workout tracker.
 
 ## Verification
-When this version runs, the dashboard shows: **LiftLog v9 Sleek**.
+When this version runs, the dashboard shows: **LiftLog v10 Sleek**.
 
 ## Features
 - No big global kg/lb button
@@ -111,3 +111,26 @@ The More page contains:
 - Settings
 
 This makes the iPhone interface much cleaner than the crowded v8 navigation.
+
+
+## v10 Update — Manual Supabase Sync
+
+This version adds real manual cloud sync:
+
+- Upload this device to cloud
+- Download cloud to this device
+- Use the same private sync code on PC and iPhone
+- Syncs:
+  - settings
+  - exercises
+  - subtypes
+  - routines
+  - routine exercises
+  - workouts
+  - sets
+
+Photos stored as browser Blobs may not reliably sync across devices yet. Proper photo sync should be a future Supabase Storage feature.
+
+## Setup
+
+Run `supabase-schema.sql` inside Supabase SQL Editor, then paste your Supabase Project URL and anon key into LiftLog → More → Backup + Cloud.

@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v9-working-navigation",
-  "version": "9.0.0",
+  "name": "liftlog-v10-supabase-manual-sync",
+  "version": "10.0.0",
   "private": true,
   "type": "module",
   "scripts": {

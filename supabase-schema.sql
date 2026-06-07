@@ -1,21 +1,13 @@
--- LiftLog v8 Supabase starter schema
--- Run this in Supabase SQL editor when ready for cloud sync.
+-- LiftLog v10 Manual Sync Schema
+-- Run this in your Supabase SQL Editor.
 
-create extension if not exists "uuid-ossp";
-
-create table if not exists liftlog_profiles (
-  id uuid primary key default uuid_generate_v4(),
-  email text,
-  created_at timestamptz default now()
-);
-
-create table if not exists liftlog_backup_snapshots (
-  id uuid primary key default uuid_generate_v4(),
-  user_label text,
+create table if not exists liftlog_sync (
+  sync_key_hash text primary key,
   payload jsonb not null,
-  created_at timestamptz default now()
+  updated_at timestamptz not null default now()
 );
 
--- Simple first cloud step:
--- export local JSON from LiftLog, then store it as a backup snapshot.
--- Full bidirectional table sync should be v9 because it needs auth rules and conflict resolution.
+-- For this first personal-use sync version, RLS is disabled by default.
+-- Your private sync code is SHA-256 hashed before being sent to Supabase.
+-- Do not use an obvious sync code.
+alter table liftlog_sync disable row level security;
