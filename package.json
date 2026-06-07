@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v10-supabase-manual-sync",
-  "version": "10.0.0",
+  "name": "liftlog-v10-1-fixed-sync",
+  "version": "10.1.0",
   "private": true,
   "type": "module",
   "scripts": {

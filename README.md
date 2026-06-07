@@ -134,3 +134,10 @@ Photos stored as browser Blobs may not reliably sync across devices yet. Proper 
 ## Setup
 
 Run `supabase-schema.sql` inside Supabase SQL Editor, then paste your Supabase Project URL and anon key into LiftLog → More → Backup + Cloud.
+
+
+## v10.1 Fix
+
+This patch fixes the Vercel TypeScript build errors from v10:
+- Dexie transaction overload error
+- CloudConfig literal type issue

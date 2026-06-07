@@ -10,7 +10,7 @@ type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 
 type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
-type CloudConfig = { id: 'cloud'; supabaseUrl?: string; supabaseAnonKey?: string; syncKey?: string; syncEnabled: boolean; lastSync?: string };
+type CloudConfig = { id: string; supabaseUrl?: string; supabaseAnonKey?: string; syncKey?: string; syncEnabled: boolean; lastSync?: string };
 type Exercise = { id?: number; name: string; muscle: string; equipment: string; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
 type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
@@ -638,25 +638,24 @@ async function buildLiftLogPayload() {
 
 async function replaceLocalDataFromPayload(payload:any) {
   if (!payload) throw new Error('No payload found.');
-  await db.transaction('rw', db.settings, db.exercises, db.subtypes, db.routines, db.routineExercises, db.workouts, db.sets, async () => {
-    await db.settings.clear();
-    await db.exercises.clear();
-    await db.subtypes.clear();
-    await db.routines.clear();
-    await db.routineExercises.clear();
-    await db.workouts.clear();
-    await db.sets.clear();
 
-    if (payload.settings?.length) await db.settings.bulkPut(payload.settings);
-    else await db.settings.put({id:'settings',unit:'kg',theme:'light'});
+  await db.settings.clear();
+  await db.exercises.clear();
+  await db.subtypes.clear();
+  await db.routines.clear();
+  await db.routineExercises.clear();
+  await db.workouts.clear();
+  await db.sets.clear();
 
-    if (payload.exercises?.length) await db.exercises.bulkPut(payload.exercises);
-    if (payload.subtypes?.length) await db.subtypes.bulkPut(payload.subtypes);
-    if (payload.routines?.length) await db.routines.bulkPut(payload.routines);
-    if (payload.routineExercises?.length) await db.routineExercises.bulkPut(payload.routineExercises);
-    if (payload.workouts?.length) await db.workouts.bulkPut(payload.workouts);
-    if (payload.sets?.length) await db.sets.bulkPut(payload.sets);
-  });
+  if (payload.settings?.length) await db.settings.bulkPut(payload.settings);
+  else await db.settings.put({id:'settings',unit:'kg',theme:'light'});
+
+  if (payload.exercises?.length) await db.exercises.bulkPut(payload.exercises);
+  if (payload.subtypes?.length) await db.subtypes.bulkPut(payload.subtypes);
+  if (payload.routines?.length) await db.routines.bulkPut(payload.routines);
+  if (payload.routineExercises?.length) await db.routineExercises.bulkPut(payload.routineExercises);
+  if (payload.workouts?.length) await db.workouts.bulkPut(payload.workouts);
+  if (payload.sets?.length) await db.sets.bulkPut(payload.sets);
 }
 
 async function syncKeyHash(syncKey:string) {
@@ -715,7 +714,7 @@ function BackupPage({data}:any){
   async function doUpload(){
     try{
       setBusy(true);
-      const current = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
+      const current: CloudConfig = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
       await db.cloud.put(current);
       await uploadLiftLogToCloud(current);
       await db.cloud.put({...current,lastSync:new Date().toISOString()});
@@ -732,7 +731,7 @@ function BackupPage({data}:any){
     if(!confirm('Download cloud data to this device? This replaces local LiftLog data on this browser.')) return;
     try{
       setBusy(true);
-      const current = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
+      const current: CloudConfig = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
       await db.cloud.put(current);
       await downloadLiftLogFromCloud(current);
       await db.cloud.put({...current,lastSync:new Date().toISOString()});
@@ -781,9 +780,7 @@ function ProgressPage({data}:any){
   const {settings,exercises,subtypes,workouts,sets}=data;
   const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);
   const [sid,setSid]=useState<number|undefined>();
-  const filtered = sets
-  .filter((s: WorkoutSet) => s.exerciseId === eid && (!sid || s.subtypeId === sid))
-  .sort((a: WorkoutSet, b: WorkoutSet) => a.createdAt.localeCompare(b.createdAt));
+  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   const recent = filtered.slice(-12);
   const maxWeight = Math.max(...recent.map((s:WorkoutSet)=>convert(s.weight,s.unit,settings.unit)),1);
   const maxVol = Math.max(...recent.map((s:WorkoutSet)=>volumeKg(s)),1);
