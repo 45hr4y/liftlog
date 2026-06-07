@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v11-3-verified-backups",
-  "version": "11.3.0",
+  "name": "liftlog-v12-ui-upgrade",
+  "version": "12.0.0",
   "private": true,
   "type": "module",
   "scripts": {

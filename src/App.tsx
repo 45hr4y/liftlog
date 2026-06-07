@@ -28,7 +28,7 @@ class LiftDB extends Dexie {
   sets!: Table<WorkoutSet, number>;
   backups!: Table<BackupSnapshot, number>;
   constructor() {
-    super('liftlog_v11_3_verified_backups_db');
+    super('liftlog_v12_ui_upgrade_db');
     this.version(1).stores({
       settings: 'id',
       exercises: '++id,name,muscle,equipment',
@@ -242,27 +242,148 @@ function Tab({p,page,setPage,icon,label}:any){return <button className={page===p
 function Card({children, cls=''}:any){return <div className={'card '+cls}>{children}</div>}
 function Pills({children}:any){return <div className="pills">{children}</div>}
 
+
+function workoutsThisWeek(workouts: Workout[]) {
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+  const week = weekStart.toISOString().slice(0,10);
+  return workouts.filter(w => w.date >= week);
+}
+
+function groupVolumesForWeek(exercises: Exercise[], workouts: Workout[], sets: WorkoutSet[]) {
+  const groups: Record<string, number> = { Chest:0, Back:0, Shoulders:0, Legs:0, Arms:0, Core:0 };
+  const weekWorkouts = workoutsThisWeek(workouts);
+  const weekSets = sets.filter(s => weekWorkouts.some(w => w.id === s.workoutId));
+  weekSets.forEach(s => {
+    const ex = exercises.find(e => e.id === s.exerciseId);
+    if (!ex) return;
+    const m = ex.muscle;
+    const bucket =
+      ['Chest'].includes(m) ? 'Chest' :
+      ['Upper Back','Erectors','Lats'].includes(m) ? 'Back' :
+      ['Front Delt','Rear Delt','Side Delt','Shoulders'].includes(m) ? 'Shoulders' :
+      ['Hamstrings','Quadriceps','Calves','Glutes'].includes(m) ? 'Legs' :
+      ['Biceps','Triceps'].includes(m) ? 'Arms' :
+      ['Abs','Obliques','Core'].includes(m) ? 'Core' : 'Core';
+    groups[bucket] += volumeKg(s);
+  });
+  return groups;
+}
+
+function recentPRItems(exercises: Exercise[], sets: WorkoutSet[]) {
+  const bestByExercise = new Map<number, WorkoutSet>();
+  sets.forEach(s => {
+    const current = bestByExercise.get(s.exerciseId);
+    if (!current || e1rm(kgValue(s), s.reps) > e1rm(kgValue(current), current.reps)) {
+      bestByExercise.set(s.exerciseId, s);
+    }
+  });
+  return [...bestByExercise.values()]
+    .sort((a: WorkoutSet, b: WorkoutSet) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 3)
+    .map(s => ({ set: s, exercise: exercises.find(e => e.id === s.exerciseId) }));
+}
+
+function recoveryLabel(volume: number) {
+  if (volume <= 0) return { label: 'Fresh', cls: 'fresh' };
+  if (volume < 2500) return { label: 'Light', cls: 'light' };
+  if (volume < 7000) return { label: 'Trained', cls: 'trained' };
+  return { label: 'High', cls: 'high' };
+}
+
 function HomePage({data}:any){
   const {exercises,subtypes,routines,workouts,sets,setPage}=data;
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay()+1);
-  const week = weekStart.toISOString().slice(0,10);
-  const weekWorkouts = workouts.filter((w:Workout)=>w.date>=week);
+  const weekWorkouts = workoutsThisWeek(workouts);
   const weekSets = sets.filter((s:WorkoutSet)=>weekWorkouts.some((w:Workout)=>w.id===s.workoutId));
   const vol = weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
-  const muscleCounts = new Map<string,number>();
-  weekSets.forEach((s:WorkoutSet)=>{const e=exercises.find((x:Exercise)=>x.id===s.exerciseId); if(e) muscleCounts.set(e.muscle,(muscleCounts.get(e.muscle)||0)+1)})
-  return <section>
-    <Card cls="hero"><h2>Ready to train?</h2><p>Pick a routine, choose the exact machine subtype, and compare your previous sets.</p><button className="primary" onClick={()=>setPage('log')}>Start Workout</button></Card>
-    <div className="quickActions">
+  const lastWorkout = workouts[0];
+  const suggestedRoutine = routines.find((r:Routine)=>!r.archived) || routines[0];
+  const groups = groupVolumesForWeek(exercises, workouts, sets);
+  const maxGroup = Math.max(...Object.values(groups), 1);
+  const prs = recentPRItems(exercises, sets);
+
+  return <section className="homeV12">
+    <Card cls="hero heroV12">
+      <div className="heroTop">
+        <div>
+          <div className="eyebrow lightText">TODAY</div>
+          <h2>{suggestedRoutine ? suggestedRoutine.name : 'Ready to train?'}</h2>
+          <p>{lastWorkout ? `Last workout: ${lastWorkout.title} on ${lastWorkout.date}` : 'Build a routine and start your first session.'}</p>
+        </div>
+        <div className="heroBadge">🔥</div>
+      </div>
+      <button className="primary glowBtn" onClick={()=>setPage('log')}>Start Workout</button>
+    </Card>
+
+    <div className="quickActions quickActionsV12">
       <button onClick={()=>setPage('exercises')}>Exercises</button>
       <button onClick={()=>setPage('subtypes')}>Machines</button>
       <button onClick={()=>setPage('routines')}>Routines</button>
     </div>
-    <div className="grid2"><Metric n={exercises.length} l="Exercises"/><Metric n={subtypes.length} l="Subtypes"/><Metric n={routines.length} l="Routines"/><Metric n={weekSets.length} l="Sets this week"/></div>
-    <Card><h3>Weekly Volume</h3><div className="big">{fmtVol(vol)}</div><p className="muted">Normalised to kg.</p></Card>
-    <Card><h3>Weekly volume by group</h3>{Object.entries(weeklyVolumeByBucket(exercises, workouts, sets)).some(([,v])=>v>0) ? Object.entries(weeklyVolumeByBucket(exercises, workouts, sets)).map(([m,v])=><Heat key={m} label={m} value={Math.round(v/100)}/>) : <p className="muted">No workouts logged yet.</p>}<p className="muted">Open Stats for the spider chart.</p></Card>
+
+    <div className="dashboardGrid">
+      <Card cls="glassMetric">
+        <span>Weekly Volume</span>
+        <strong>{fmtVol(vol)}</strong>
+        <em>{weekSets.length} sets this week</em>
+      </Card>
+      <Card cls="glassMetric">
+        <span>Workouts</span>
+        <strong>{weekWorkouts.length}</strong>
+        <em>this week</em>
+      </Card>
+      <Card cls="glassMetric">
+        <span>Library</span>
+        <strong>{exercises.length}</strong>
+        <em>{subtypes.length} machine subtypes</em>
+      </Card>
+      <Card cls="glassMetric">
+        <span>Routines</span>
+        <strong>{routines.length}</strong>
+        <em>templates saved</em>
+      </Card>
+    </div>
+
+    <Card cls="premiumCard">
+      <div className="sectionHeader">
+        <h3>Muscle Recovery</h3>
+        <button className="textBtn" onClick={()=>setPage('stats')}>Details</button>
+      </div>
+      <div className="recoveryGrid">
+        {Object.entries(groups).map(([group, volume])=>{
+          const rec = recoveryLabel(volume);
+          return <div className={`recoveryTile ${rec.cls}`} key={group}>
+            <div className="recoveryTop"><strong>{group}</strong><span>{rec.label}</span></div>
+            <div className="recoveryBar"><b style={{width:`${Math.min(100,(volume/maxGroup)*100)}%`}} /></div>
+            <em>{fmtVol(volume)}</em>
+          </div>
+        })}
+      </div>
+    </Card>
+
+    <Card cls="premiumCard">
+      <div className="sectionHeader">
+        <h3>Recent PR Signals</h3>
+        <button className="textBtn" onClick={()=>setPage('progress')}>Progress</button>
+      </div>
+      {prs.length ? prs.map((item:any)=><div className="prFeedItem" key={item.set.id}>
+        <div className="prIcon">🏆</div>
+        <div>
+          <strong>{item.exercise?.name || 'Exercise'}</strong>
+          <span>{item.set.weight}{item.set.unit} × {item.set.reps} · e1RM {e1rm(kgValue(item.set), item.set.reps)}kg</span>
+        </div>
+      </div>) : <p className="muted">No sets logged yet. PRs will appear here after workouts.</p>}
+    </Card>
+
+    <Card cls="premiumCard">
+      <div className="sectionHeader">
+        <h3>Next Upgrade Preview</h3>
+      </div>
+      <p className="muted">Coming next: body heat map, exercise GIFs/YouTube demos, and richer exercise cards.</p>
+    </Card>
   </section>
 }
+
 function Metric({n,l}:any){return <Card cls="metric"><strong>{n}</strong><span>{l}</span></Card>}
 function Heat({label,value}:any){return <div className="heat"><span>{label}</span><div><b style={{width:`${Math.min(100,value*14)}%`}}/></div><em>{value}</em></div>}
 

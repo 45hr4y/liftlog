@@ -116,3 +116,19 @@ This makes the iPhone interface much cleaner than the crowded v8 navigation.
 ## v11.3 Verified Local Backups
 
 Supabase removed. Adds JSON export/import, local restore points, and automatic restore points after workouts. This build has been locally checked with `npm run build`.
+
+
+## v12 UI Upgrade
+
+Visual improvements:
+- Redesigned premium dashboard
+- Today's workout hero card
+- Weekly volume and library metric cards
+- Muscle recovery-style volume tiles
+- Recent PR signal feed
+- Cleaner mobile visual polish
+
+Next planned features:
+- Body heat map
+- Exercise GIF/YouTube embeds
+- Exercise demo cards
