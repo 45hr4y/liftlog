@@ -339,31 +339,5 @@ body[data-theme="dark"] .quickActions button{
 }
 
 
-/* LiftLog v10 manual cloud sync */
-.syncStatus{
-  margin-top:12px;
-  padding:12px;
-  border-radius:16px;
-  background:#ecfeff;
-  color:#155e75;
-  border:1px solid #a5f3fc;
-  font-weight:800;
-}
-body[data-theme="dark"] .syncStatus{
-  background:#164e63;
-  color:#cffafe;
-  border-color:#155e75;
-}
-.steps{
-  margin:0;
-  padding-left:20px;
-  color:#475569;
-}
-.steps li{
-  margin:8px 0;
-}
-body[data-theme="dark"] .steps{color:#cbd5e1}
-button:disabled{
-  opacity:.55;
-  cursor:not-allowed;
-}
+/* LiftLog v11 advanced local backups */
+.backupStatus{margin-top:12px;padding:12px;border-radius:16px;background:#ecfeff;color:#155e75;border:1px solid #a5f3fc;font-weight:800}body[data-theme="dark"] .backupStatus{background:#164e63;color:#cffafe;border-color:#155e75}.backupRow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #e2e8f0}body[data-theme="dark"] .backupRow{border-bottom-color:#1e293b}.backupRow strong{display:block;font-size:14px}.backupRow span{display:block;color:#64748b;font-size:12px;margin-top:3px}.backupActions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.steps{margin:0;padding-left:20px;color:#475569}.steps li{margin:8px 0}body[data-theme="dark"] .steps{color:#cbd5e1}@media(max-width:720px){.backupRow{grid-template-columns:1fr}.backupActions{justify-content:flex-start}}

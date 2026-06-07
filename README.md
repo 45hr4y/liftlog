@@ -1,9 +1,9 @@
-# LiftLog v10 Sleek
+# LiftLog v9 Sleek
 
 This is a clean rebuild of the workout tracker.
 
 ## Verification
-When this version runs, the dashboard shows: **LiftLog v10 Sleek**.
+When this version runs, the dashboard shows: **LiftLog v9 Sleek**.
 
 ## Features
 - No big global kg/lb button
@@ -74,7 +74,7 @@ Open the local URL on PC or the Network URL on iPhone.
 
 - Browser tab title changed to **LiftLog**.
 - Added Vercel hosting support.
-- Added Supabase settings screen and schema scaffold.
+- Added Local backup settings screen and schema scaffold.
 - Added Backup tab.
 - Added JSON import backup.
 - Added Progress tab:
@@ -86,7 +86,7 @@ Open the local URL on PC or the Network URL on iPhone.
 - Added routine exercise reorder buttons.
 - Added more mobile-friendly scrollable bottom navigation.
 
-Important: full automatic cloud sync requires your own Supabase URL/key and should be activated as v9 after auth/conflict handling is added.
+Important: full automatic cloud sync requires your own Local backup URL/key and should be activated as v9 after auth/conflict handling is added.
 
 
 ## v9 Working Navigation Update
@@ -113,38 +113,19 @@ The More page contains:
 This makes the iPhone interface much cleaner than the crowded v8 navigation.
 
 
-## v10 Update — Manual Supabase Sync
+## v11 Update — Advanced Local Backups
 
-This version adds real manual cloud sync:
+Local backup has been removed to keep LiftLog simpler and fully local-first.
 
-- Upload this device to cloud
-- Download cloud to this device
-- Use the same private sync code on PC and iPhone
-- Syncs:
-  - settings
-  - exercises
-  - subtypes
-  - routines
-  - routine exercises
-  - workouts
-  - sets
+Added:
+- Export JSON Backup
+- Import JSON Backup
+- Local restore points
+- Automatic restore point when a workout is finished
+- Keeps the latest 20 in-browser restore points
+- Restore/download/delete individual snapshots
 
-Photos stored as browser Blobs may not reliably sync across devices yet. Proper photo sync should be a future Supabase Storage feature.
-
-## Setup
-
-Run `supabase-schema.sql` inside Supabase SQL Editor, then paste your Supabase Project URL and anon key into LiftLog → More → Backup + Cloud.
-
-
-## v10.1 Fix
-
-This patch fixes the Vercel TypeScript build errors from v10:
-- Dexie transaction overload error
-- CloudConfig literal type issue
-
-
-## v10.2 Fix
-
-This patch fixes the remaining Vercel TypeScript build error:
-- Untyped sort callback parameters in Progress/History code.
-- Also relaxes `noImplicitAny` for prototype deployment stability.
+Recommended workflow:
+1. Export JSON Backup weekly.
+2. Save the file to iCloud Drive, Google Drive, OneDrive, or email.
+3. Import that JSON on another device if needed.

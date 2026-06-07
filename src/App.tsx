@@ -1,7 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Dexie, { Table } from 'dexie';
-import { createClient } from '@supabase/supabase-js';
 import { Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2 } from 'lucide-react';
 
 type Unit = 'kg' | 'lb';
@@ -10,7 +9,7 @@ type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 
 type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
-type CloudConfig = { id: string; supabaseUrl?: string; supabaseAnonKey?: string; syncKey?: string; syncEnabled: boolean; lastSync?: string };
+type BackupSnapshot = { id?: number; name: string; reason: string; createdAt: string; payload: any };
 type Exercise = { id?: number; name: string; muscle: string; equipment: string; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
 type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
@@ -27,9 +26,10 @@ class LiftDB extends Dexie {
   routineExercises!: Table<RoutineExercise, number>;
   workouts!: Table<Workout, number>;
   sets!: Table<WorkoutSet, number>;
+  backups!: Table<BackupSnapshot, number>;
   cloud!: Table<CloudConfig, string>;
   constructor() {
-    super('liftlog_v10_supabase_sync_db');
+    super('liftlog_v11_local_backups_db');
     this.version(1).stores({
       settings: 'id',
       exercises: '++id,name,muscle,equipment',
@@ -38,6 +38,7 @@ class LiftDB extends Dexie {
       routineExercises: '++id,routineId,exerciseId,subtypeId,order',
       workouts: '++id,routineId,date',
       sets: '++id,workoutId,exerciseId,subtypeId,createdAt',
+      backups: '++id,createdAt,reason',
       cloud: 'id'
     });
   }
@@ -95,9 +96,9 @@ function workoutSummary(workout: Workout | undefined, exercises: Exercise[], set
     const bucket = bucketForMuscle(ex.muscle);
     muscleVolumes[bucket] = (muscleVolumes[bucket] || 0) + volumeKg(s);
   });
-  const topMuscle = Object.entries(muscleVolumes).sort((a: [string, number], b: [string, number])=>b[1]-a[1])[0];
+  const topMuscle = Object.entries(muscleVolumes).sort((a,b)=>b[1]-a[1])[0];
   const uniqueExercises = new Set(workoutSets.map(s => s.exerciseId)).size;
-  const bestSet = [...workoutSets].sort((a: WorkoutSet,b: WorkoutSet)=>volumeKg(b)-volumeKg(a))[0];
+  const bestSet = [...workoutSets].sort((a,b)=>volumeKg(b)-volumeKg(a))[0];
   const bestE1RMSet = [...workoutSets].sort((a,b)=>e1rm(kgValue(b), b.reps)-e1rm(kgValue(a), a.reps))[0];
   return {
     totalSets: workoutSets.length,
@@ -128,7 +129,6 @@ const colours = ['#7c3aed','#2563eb','#16a34a','#dc2626','#ea580c','#0891b2','#d
 
 async function seed() {
   if (!await db.settings.get('settings')) await db.settings.put({ id:'settings', unit:'kg', theme:'light' });
-  if (!await db.cloud.get('cloud')) await db.cloud.put({ id:'cloud', syncEnabled:false, syncKey:'' });
   if (await db.exercises.count()) return;
   const t = now();
   const ids = await db.exercises.bulkAdd([
@@ -163,10 +163,10 @@ function allTimePRsForExercise(exerciseId: number | undefined, sets: WorkoutSet[
   if (!exerciseId) return null;
   const exerciseSets = sets.filter(s => s.exerciseId === exerciseId);
   if (!exerciseSets.length) return null;
-  const heaviest = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>kgValue(b)-kgValue(a))[0];
-  const bestVolumeSet = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>volumeKg(b)-volumeKg(a))[0];
-  const bestE1RM = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>e1rm(kgValue(b),b.reps)-e1rm(kgValue(a),a.reps))[0];
-  const mostReps = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>b.reps-a.reps)[0];
+  const heaviest = [...exerciseSets].sort((a,b)=>kgValue(b)-kgValue(a))[0];
+  const bestVolumeSet = [...exerciseSets].sort((a,b)=>volumeKg(b)-volumeKg(a))[0];
+  const bestE1RM = [...exerciseSets].sort((a,b)=>e1rm(kgValue(b),b.reps)-e1rm(kgValue(a),a.reps))[0];
+  const mostReps = [...exerciseSets].sort((a,b)=>b.reps-a.reps)[0];
   const totalVolume = exerciseSets.reduce((a,s)=>a+volumeKg(s),0);
   return { heaviest, bestVolumeSet, bestE1RM, mostReps, totalVolume, setCount: exerciseSets.length };
 }
@@ -176,7 +176,7 @@ function lastSessionsForExercise(exerciseId: number | undefined, workouts: Worko
   const byWorkout = workouts
     .map(w => ({ workout: w, sets: sets.filter(s => s.workoutId === w.id && s.exerciseId === exerciseId) }))
     .filter(row => row.sets.length)
-    .sort((a: any,b: any)=>b.workout.date.localeCompare(a.workout.date))
+    .sort((a,b)=>b.workout.date.localeCompare(a.workout.date))
     .slice(0, limit);
   return byWorkout;
 }
@@ -197,7 +197,6 @@ export default function App() {
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [activeWorkoutId, setActiveWorkoutId] = useState<number|undefined>();
   const [selectedExerciseId, setSelectedExerciseId] = useState<number|undefined>();
-  const [cloud, setCloud] = useState<CloudConfig>({id:'cloud',syncEnabled:false});
 
   async function refresh() {
     setSettings(await db.settings.get('settings') || {id:'settings',unit:'kg',theme:'light'});
@@ -207,7 +206,6 @@ export default function App() {
     setRoutineExercises(await db.routineExercises.toArray());
     setWorkouts(await db.workouts.orderBy('date').reverse().toArray());
     setSets(await db.sets.toArray());
-    setCloud(await db.cloud.get('cloud') || {id:'cloud',syncEnabled:false});
   }
   useEffect(()=>{ seed().then(refresh); },[]);
   useEffect(()=>{ document.body.dataset.theme = settings.theme; },[settings.theme]);
@@ -229,7 +227,7 @@ export default function App() {
       {page==='progress' && <ProgressPage data={{settings,exercises,subtypes,workouts,sets}} />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
-      {page==='backup' && <BackupPage data={{cloud,refresh}} />}
+      {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
     </main>
     <nav className="tabs fiveTabs">
@@ -350,14 +348,14 @@ function RoutinesPage({data}:any){
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
   async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise,b: RoutineExercise)=>a.order-b.order);
+  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
   return <section><Card><h3>Create Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button></Card>
   <Card><h3>Edit Routine</h3><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3">
         <button className="secondary mini" onClick={async()=>{ 
           const r = routines.find((x:Routine)=>x.id===routineId);
           if(!r || !routineId) return;
           const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()});
-          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise,b: RoutineExercise)=>a.order-b.order);
+          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
           for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()});
           setRoutineId(newId);
           refresh();
@@ -413,7 +411,7 @@ function LogPage({data}:any){
     </Card>
   </section>;
 
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a: RoutineExercise,b: RoutineExercise)=>a.order-b.order);
+  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
   const liveSummary = workoutSummary(activeWorkout, exercises, sets);
 
@@ -475,8 +473,8 @@ function WorkoutSummaryCard({workout, exercises, sets}:{workout:Workout; exercis
 }
 
 function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Workout, workouts:Workout[], sets:WorkoutSet[]){
-  const past=workouts.filter(w=>w.id!==workout.id&&w.date<workout.date).sort((a: Workout,b: Workout)=>b.date.localeCompare(a.date));
-  for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a: WorkoutSet,b: WorkoutSet)=>a.setNumber-b.setNumber); if(found.length)return found}
+  const past=workouts.filter(w=>w.id!==workout.id&&w.date<workout.date).sort((a,b)=>b.date.localeCompare(a.date));
+  for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a,b)=>a.setNumber-b.setNumber); if(found.length)return found}
   return [];
 }
 function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave}:any){
@@ -579,7 +577,7 @@ function MorePage({data}:any){
     {title:'Machine Subtypes', subtitle:`${subtypes.length} saved`, page:'subtypes'},
     {title:'Routines', subtitle:`${routines.length} templates`, page:'routines'},
     {title:'Stats', subtitle:'Spider chart and weekly volume', page:'stats'},
-    {title:'Backup + Cloud', subtitle:'Export, import and Supabase settings', page:'backup'},
+    {title:'Backups', subtitle:'Export, import and restore points', page:'backup'},
     {title:'Settings', subtitle:'Theme, unit and local data', page:'settings'}
   ];
   return <section>
@@ -596,7 +594,7 @@ function MorePage({data}:any){
 function SettingsPage({data}:any){const {settings,refresh}=data; 
   async function exportData(){
     const payload={settings:await db.settings.toArray(),cloud:await db.cloud.toArray(),exercises:await db.exercises.toArray(),subtypes:await db.subtypes.toArray(),routines:await db.routines.toArray(),routineExercises:await db.routineExercises.toArray(),workouts:await db.workouts.toArray(),sets:await db.sets.toArray()}; 
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-v10-export.json'; a.click()
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-backup.json'; a.click()
   } 
   async function importData(file: File | undefined){
     if(!file) return;
@@ -621,11 +619,11 @@ function SettingsPage({data}:any){const {settings,refresh}=data;
 }
 
 
-async function buildLiftLogPayload() {
+async function buildLocalBackupPayload() {
   return {
-    exportedAt: new Date().toISOString(),
     app: 'LiftLog',
-    version: 10,
+    version: 11,
+    exportedAt: new Date().toISOString(),
     settings: await db.settings.toArray(),
     exercises: await db.exercises.toArray(),
     subtypes: await db.subtypes.toArray(),
@@ -636,9 +634,19 @@ async function buildLiftLogPayload() {
   };
 }
 
-async function replaceLocalDataFromPayload(payload:any) {
-  if (!payload) throw new Error('No payload found.');
+async function createBackupSnapshot(reason = 'Manual backup') {
+  const payload = await buildLocalBackupPayload();
+  const stamp = new Date().toLocaleString();
+  await db.backups.add({ name: `LiftLog backup - ${stamp}`, reason, createdAt: new Date().toISOString(), payload });
+  const all = await db.backups.orderBy('createdAt').toArray();
+  const excess = all.length - 20;
+  if (excess > 0) {
+    for (const old of all.slice(0, excess)) if (old.id) await db.backups.delete(old.id);
+  }
+}
 
+async function restoreFromPayload(payload:any) {
+  if (!payload) throw new Error('No backup payload found.');
   await db.settings.clear();
   await db.exercises.clear();
   await db.subtypes.clear();
@@ -646,10 +654,8 @@ async function replaceLocalDataFromPayload(payload:any) {
   await db.routineExercises.clear();
   await db.workouts.clear();
   await db.sets.clear();
-
   if (payload.settings?.length) await db.settings.bulkPut(payload.settings);
-  else await db.settings.put({id:'settings',unit:'kg',theme:'light'});
-
+  else await db.settings.put({id:'settings', unit:'kg', theme:'light'});
   if (payload.exercises?.length) await db.exercises.bulkPut(payload.exercises);
   if (payload.subtypes?.length) await db.subtypes.bulkPut(payload.subtypes);
   if (payload.routines?.length) await db.routines.bulkPut(payload.routines);
@@ -658,120 +664,98 @@ async function replaceLocalDataFromPayload(payload:any) {
   if (payload.sets?.length) await db.sets.bulkPut(payload.sets);
 }
 
-async function syncKeyHash(syncKey:string) {
-  const clean = syncKey.trim();
-  if (!clean) throw new Error('Enter a private sync code first.');
-  const data = new TextEncoder().encode(clean);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+function downloadJson(payload:any, filename:string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'}));
+  a.download = filename;
+  a.click();
 }
 
-function makeSupabaseClient(url:string|undefined, key:string|undefined) {
-  if (!url || !key) throw new Error('Enter Supabase URL and anon key first.');
-  return createClient(url, key);
-}
-
-async function uploadLiftLogToCloud(cloud:CloudConfig) {
-  const client = makeSupabaseClient(cloud.supabaseUrl, cloud.supabaseAnonKey);
-  const keyHash = await syncKeyHash(cloud.syncKey || '');
-  const payload = await buildLiftLogPayload();
-  const { error } = await client
-    .from('liftlog_sync')
-    .upsert({ sync_key_hash: keyHash, payload, updated_at: new Date().toISOString() }, { onConflict: 'sync_key_hash' });
-  if (error) throw error;
-  return payload;
-}
-
-async function downloadLiftLogFromCloud(cloud:CloudConfig) {
-  const client = makeSupabaseClient(cloud.supabaseUrl, cloud.supabaseAnonKey);
-  const keyHash = await syncKeyHash(cloud.syncKey || '');
-  const { data, error } = await client
-    .from('liftlog_sync')
-    .select('payload, updated_at')
-    .eq('sync_key_hash', keyHash)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.payload) throw new Error('No cloud backup found for this sync code.');
-  await replaceLocalDataFromPayload(data.payload);
-  return data;
+function backupFilename() {
+  const d = new Date();
+  const pad = (n:number) => String(n).padStart(2, '0');
+  return `LiftLog_Backup_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}.json`;
 }
 
 function BackupPage({data}:any){
-  const {cloud,refresh}=data;
-  const [url,setUrl]=useState(cloud.supabaseUrl||'');
-  const [key,setKey]=useState(cloud.supabaseAnonKey||'');
-  const [syncKey,setSyncKey]=useState(cloud.syncKey||'');
-  const [enabled,setEnabled]=useState(Boolean(cloud.syncEnabled));
+  const {refresh}=data;
+  const [backups,setBackups]=useState<BackupSnapshot[]>([]);
   const [status,setStatus]=useState('');
-  const [busy,setBusy]=useState(false);
 
-  async function save(){
-    await db.cloud.put({id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:cloud.lastSync});
-    refresh();
-    setStatus('Cloud settings saved.');
+  async function loadBackups(){ setBackups(await db.backups.orderBy('createdAt').reverse().toArray()); }
+  useEffect(()=>{loadBackups();},[]);
+
+  async function exportBackup(){
+    const payload = await buildLocalBackupPayload();
+    downloadJson(payload, backupFilename());
+    await createBackupSnapshot('Exported JSON backup');
+    await loadBackups();
+    setStatus('Backup exported and local restore point created.');
   }
 
-  async function doUpload(){
-    try{
-      setBusy(true);
-      const current: CloudConfig = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
-      await db.cloud.put(current);
-      await uploadLiftLogToCloud(current);
-      await db.cloud.put({...current,lastSync:new Date().toISOString()});
-      setStatus('Upload complete. Cloud now matches this device.');
-      refresh();
-    }catch(err:any){
-      setStatus('Upload failed: ' + (err.message || String(err)));
-    }finally{
-      setBusy(false);
-    }
+  async function manualSnapshot(){
+    await createBackupSnapshot('Manual restore point');
+    await loadBackups();
+    setStatus('Manual restore point created.');
   }
 
-  async function doDownload(){
-    if(!confirm('Download cloud data to this device? This replaces local LiftLog data on this browser.')) return;
+  async function importBackup(file: File | undefined){
+    if(!file) return;
+    if(!confirm('Import this JSON backup? This will replace the current local LiftLog data on this device.')) return;
     try{
-      setBusy(true);
-      const current: CloudConfig = {id:'cloud',supabaseUrl:url,supabaseAnonKey:key,syncKey,syncEnabled:enabled,lastSync:new Date().toISOString()};
-      await db.cloud.put(current);
-      await downloadLiftLogFromCloud(current);
-      await db.cloud.put({...current,lastSync:new Date().toISOString()});
-      setStatus('Download complete. This device now matches cloud.');
+      await createBackupSnapshot('Before JSON import');
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      await restoreFromPayload(payload);
       refresh();
-    }catch(err:any){
-      setStatus('Download failed: ' + (err.message || String(err)));
-    }finally{
-      setBusy(false);
-    }
+      await loadBackups();
+      setStatus('Import complete. Current device now uses the imported backup.');
+    }catch(err:any){ setStatus('Import failed: ' + (err.message || String(err))); }
+  }
+
+  async function restoreSnapshot(snapshot: BackupSnapshot){
+    if(!confirm(`Restore "${snapshot.name}"? This replaces current local data on this device.`)) return;
+    try{
+      await createBackupSnapshot('Before restoring snapshot');
+      await restoreFromPayload(snapshot.payload);
+      refresh();
+      await loadBackups();
+      setStatus('Restore complete.');
+    }catch(err:any){ setStatus('Restore failed: ' + (err.message || String(err))); }
+  }
+
+  async function deleteSnapshot(snapshot: BackupSnapshot){
+    if(!snapshot.id) return;
+    if(!confirm('Delete this restore point?')) return;
+    await db.backups.delete(snapshot.id);
+    await loadBackups();
   }
 
   return <section>
-    <Card cls="hero"><h2>Cloud Sync</h2><p>Manual sync for PC ↔ iPhone. Upload from one device, then download on the other.</p></Card>
-
+    <Card cls="hero"><h2>Local Backups</h2><p>Export JSON files, import backups, and keep the last 20 in-browser restore points. No Supabase required.</p></Card>
     <Card>
-      <h3>1. Supabase settings</h3>
-      <input placeholder="Supabase project URL" value={url} onChange={e=>setUrl(e.target.value)}/>
-      <input placeholder="Supabase anon public key" value={key} onChange={e=>setKey(e.target.value)}/>
-      <input placeholder="Private sync code e.g. ashray-liftlog-2026" value={syncKey} onChange={e=>setSyncKey(e.target.value)}/>
-      <label className="checkLine"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)}/> Enable sync on this device</label>
-      <button className="primary" onClick={save} disabled={busy}>Save settings</button>
-      <p className="muted">Use the same URL, anon key and private sync code on your PC and iPhone.</p>
+      <h3>Backup actions</h3>
+      <button className="primary" onClick={exportBackup}>Export JSON Backup</button>
+      <label className="upload">Import JSON Backup<input hidden type="file" accept="application/json" onChange={e=>importBackup(e.target.files?.[0])}/></label>
+      <button className="secondary" onClick={manualSnapshot}>Create restore point</button>
+      <p className="muted">Tip: save exported JSON files to iCloud Drive, Google Drive, OneDrive or email them to yourself.</p>
+      {status && <div className="backupStatus">{status}</div>}
     </Card>
-
     <Card>
-      <h3>2. Manual sync</h3>
-      <button className="primary" disabled={busy || !enabled} onClick={doUpload}>Upload this device to cloud</button>
-      <button className="secondary" disabled={busy || !enabled} onClick={doDownload}>Download cloud to this device</button>
-      <p className="muted">Last sync/check: {cloud.lastSync ? new Date(cloud.lastSync).toLocaleString() : 'Never'}</p>
-      {status && <div className="syncStatus">{status}</div>}
+      <h3>Local restore points</h3>
+      <p className="muted">LiftLog keeps up to 20 restore points in this browser. These do not transfer to other devices unless exported as JSON.</p>
+      {backups.length ? backups.map(b=><div className="backupRow" key={b.id}>
+        <div><strong>{b.name}</strong><span>{b.reason} · {new Date(b.createdAt).toLocaleString()}</span></div>
+        <div className="backupActions">
+          <button className="smallAction" onClick={()=>downloadJson(b.payload, backupFilename())}>Download</button>
+          <button className="smallAction" onClick={()=>restoreSnapshot(b)}>Restore</button>
+          <button className="trash tinyTrash" onClick={()=>deleteSnapshot(b)}><Trash2/></button>
+        </div>
+      </div>) : <p className="muted">No restore points yet.</p>}
     </Card>
-
     <Card>
-      <h3>How to use safely</h3>
-      <ol className="steps">
-        <li>On the device with the best/current data, press <strong>Upload this device to cloud</strong>.</li>
-        <li>On your other device, press <strong>Download cloud to this device</strong>.</li>
-        <li>Do not edit both devices separately before syncing, or you may overwrite one side.</li>
-      </ol>
+      <h3>Simple device transfer</h3>
+      <ol className="steps"><li>On your main device, press <strong>Export JSON Backup</strong>.</li><li>Send the file to your other device using AirDrop, iCloud Drive, email, Google Drive or OneDrive.</li><li>On the other device, press <strong>Import JSON Backup</strong>.</li></ol>
     </Card>
   </section>
 }
@@ -780,7 +764,7 @@ function ProgressPage({data}:any){
   const {settings,exercises,subtypes,workouts,sets}=data;
   const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);
   const [sid,setSid]=useState<number|undefined>();
-  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a: WorkoutSet, b: WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
+  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   const recent = filtered.slice(-12);
   const maxWeight = Math.max(...recent.map((s:WorkoutSet)=>convert(s.weight,s.unit,settings.unit)),1);
   const maxVol = Math.max(...recent.map((s:WorkoutSet)=>volumeKg(s)),1);
