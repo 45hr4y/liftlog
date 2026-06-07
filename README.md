@@ -141,3 +141,10 @@ Run `supabase-schema.sql` inside Supabase SQL Editor, then paste your Supabase P
 This patch fixes the Vercel TypeScript build errors from v10:
 - Dexie transaction overload error
 - CloudConfig literal type issue
+
+
+## v10.2 Fix
+
+This patch fixes the remaining Vercel TypeScript build error:
+- Untyped sort callback parameters in Progress/History code.
+- Also relaxes `noImplicitAny` for prototype deployment stability.

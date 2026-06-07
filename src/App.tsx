@@ -95,9 +95,9 @@ function workoutSummary(workout: Workout | undefined, exercises: Exercise[], set
     const bucket = bucketForMuscle(ex.muscle);
     muscleVolumes[bucket] = (muscleVolumes[bucket] || 0) + volumeKg(s);
   });
-  const topMuscle = Object.entries(muscleVolumes).sort((a,b)=>b[1]-a[1])[0];
+  const topMuscle = Object.entries(muscleVolumes).sort((a: [string, number], b: [string, number])=>b[1]-a[1])[0];
   const uniqueExercises = new Set(workoutSets.map(s => s.exerciseId)).size;
-  const bestSet = [...workoutSets].sort((a,b)=>volumeKg(b)-volumeKg(a))[0];
+  const bestSet = [...workoutSets].sort((a: WorkoutSet,b: WorkoutSet)=>volumeKg(b)-volumeKg(a))[0];
   const bestE1RMSet = [...workoutSets].sort((a,b)=>e1rm(kgValue(b), b.reps)-e1rm(kgValue(a), a.reps))[0];
   return {
     totalSets: workoutSets.length,
@@ -163,10 +163,10 @@ function allTimePRsForExercise(exerciseId: number | undefined, sets: WorkoutSet[
   if (!exerciseId) return null;
   const exerciseSets = sets.filter(s => s.exerciseId === exerciseId);
   if (!exerciseSets.length) return null;
-  const heaviest = [...exerciseSets].sort((a,b)=>kgValue(b)-kgValue(a))[0];
-  const bestVolumeSet = [...exerciseSets].sort((a,b)=>volumeKg(b)-volumeKg(a))[0];
-  const bestE1RM = [...exerciseSets].sort((a,b)=>e1rm(kgValue(b),b.reps)-e1rm(kgValue(a),a.reps))[0];
-  const mostReps = [...exerciseSets].sort((a,b)=>b.reps-a.reps)[0];
+  const heaviest = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>kgValue(b)-kgValue(a))[0];
+  const bestVolumeSet = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>volumeKg(b)-volumeKg(a))[0];
+  const bestE1RM = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>e1rm(kgValue(b),b.reps)-e1rm(kgValue(a),a.reps))[0];
+  const mostReps = [...exerciseSets].sort((a: WorkoutSet,b: WorkoutSet)=>b.reps-a.reps)[0];
   const totalVolume = exerciseSets.reduce((a,s)=>a+volumeKg(s),0);
   return { heaviest, bestVolumeSet, bestE1RM, mostReps, totalVolume, setCount: exerciseSets.length };
 }
@@ -176,7 +176,7 @@ function lastSessionsForExercise(exerciseId: number | undefined, workouts: Worko
   const byWorkout = workouts
     .map(w => ({ workout: w, sets: sets.filter(s => s.workoutId === w.id && s.exerciseId === exerciseId) }))
     .filter(row => row.sets.length)
-    .sort((a,b)=>b.workout.date.localeCompare(a.workout.date))
+    .sort((a: any,b: any)=>b.workout.date.localeCompare(a.workout.date))
     .slice(0, limit);
   return byWorkout;
 }
@@ -350,14 +350,14 @@ function RoutinesPage({data}:any){
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
   async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise,b: RoutineExercise)=>a.order-b.order);
   return <section><Card><h3>Create Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button></Card>
   <Card><h3>Edit Routine</h3><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3">
         <button className="secondary mini" onClick={async()=>{ 
           const r = routines.find((x:Routine)=>x.id===routineId);
           if(!r || !routineId) return;
           const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()});
-          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise,b: RoutineExercise)=>a.order-b.order);
           for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()});
           setRoutineId(newId);
           refresh();
@@ -413,7 +413,7 @@ function LogPage({data}:any){
     </Card>
   </section>;
 
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a: RoutineExercise,b: RoutineExercise)=>a.order-b.order);
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
   const liveSummary = workoutSummary(activeWorkout, exercises, sets);
 
@@ -475,8 +475,8 @@ function WorkoutSummaryCard({workout, exercises, sets}:{workout:Workout; exercis
 }
 
 function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Workout, workouts:Workout[], sets:WorkoutSet[]){
-  const past=workouts.filter(w=>w.id!==workout.id&&w.date<workout.date).sort((a,b)=>b.date.localeCompare(a.date));
-  for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a,b)=>a.setNumber-b.setNumber); if(found.length)return found}
+  const past=workouts.filter(w=>w.id!==workout.id&&w.date<workout.date).sort((a: Workout,b: Workout)=>b.date.localeCompare(a.date));
+  for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a: WorkoutSet,b: WorkoutSet)=>a.setNumber-b.setNumber); if(found.length)return found}
   return [];
 }
 function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave}:any){
@@ -780,7 +780,7 @@ function ProgressPage({data}:any){
   const {settings,exercises,subtypes,workouts,sets}=data;
   const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);
   const [sid,setSid]=useState<number|undefined>();
-  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a: WorkoutSet, b: WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
   const recent = filtered.slice(-12);
   const maxWeight = Math.max(...recent.map((s:WorkoutSet)=>convert(s.weight,s.unit,settings.unit)),1);
   const maxVol = Math.max(...recent.map((s:WorkoutSet)=>volumeKg(s)),1);

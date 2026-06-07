@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v10-1-fixed-sync",
-  "version": "10.1.0",
+  "name": "liftlog-v10-2-ts-fixed",
+  "version": "10.2.0",
   "private": true,
   "type": "module",
   "scripts": {
