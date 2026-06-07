@@ -591,7 +591,6 @@ function MorePage({data}:any){
 
 function SettingsPage({data}:any){const {settings,refresh}=data; 
   async function exportData(){
-    const payload={settings:await db.settings.toArray(),cloud:await db.cloud.toArray(),exercises:await db.exercises.toArray(),subtypes:await db.subtypes.toArray(),routines:await db.routines.toArray(),routineExercises:await db.routineExercises.toArray(),workouts:await db.workouts.toArray(),sets:await db.sets.toArray()}; 
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-backup.json'; a.click()
   } 
   async function importData(file: File | undefined){

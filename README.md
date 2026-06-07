@@ -134,3 +134,8 @@ Recommended workflow:
 ## v11.1 Build Fix
 
 Fixed remaining TypeScript build errors after removing Supabase/cloud sync.
+
+
+## v11.2 Final Backup Fix
+
+Removed the final leftover cloud database references so Vercel can build the local-backup version.
