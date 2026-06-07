@@ -74,7 +74,7 @@ Open the local URL on PC or the Network URL on iPhone.
 
 - Browser tab title changed to **LiftLog**.
 - Added Vercel hosting support.
-- Added Local backup settings screen and schema scaffold.
+- Added Supabase settings screen and schema scaffold.
 - Added Backup tab.
 - Added JSON import backup.
 - Added Progress tab:
@@ -86,7 +86,7 @@ Open the local URL on PC or the Network URL on iPhone.
 - Added routine exercise reorder buttons.
 - Added more mobile-friendly scrollable bottom navigation.
 
-Important: full automatic cloud sync requires your own Local backup URL/key and should be activated as v9 after auth/conflict handling is added.
+Important: full automatic cloud sync requires your own Supabase URL/key and should be activated as v9 after auth/conflict handling is added.
 
 
 ## v9 Working Navigation Update
@@ -113,29 +113,6 @@ The More page contains:
 This makes the iPhone interface much cleaner than the crowded v8 navigation.
 
 
-## v11 Update — Advanced Local Backups
+## v11.3 Verified Local Backups
 
-Local backup has been removed to keep LiftLog simpler and fully local-first.
-
-Added:
-- Export JSON Backup
-- Import JSON Backup
-- Local restore points
-- Automatic restore point when a workout is finished
-- Keeps the latest 20 in-browser restore points
-- Restore/download/delete individual snapshots
-
-Recommended workflow:
-1. Export JSON Backup weekly.
-2. Save the file to iCloud Drive, Google Drive, OneDrive, or email.
-3. Import that JSON on another device if needed.
-
-
-## v11.1 Build Fix
-
-Fixed remaining TypeScript build errors after removing Supabase/cloud sync.
-
-
-## v11.2 Final Backup Fix
-
-Removed the final leftover cloud database references so Vercel can build the local-backup version.
+Supabase removed. Adds JSON export/import, local restore points, and automatic restore points after workouts. This build has been locally checked with `npm run build`.

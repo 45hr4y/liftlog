@@ -1,70 +1,28 @@
-npm <command>
 
-Usage:
+added 69 packages, and audited 70 packages in 9s
 
-npm install        install all the dependencies in your project
-npm install <foo>  add the <foo> dependency to your project
-npm test           run this project's tests
-npm run <foo>      run the script named <foo>
-npm <command> -h   quick help on <command>
-npm -l             display usage info for all commands
-npm help <term>    search for help on <term>
-npm help npm       more involved overview
+7 packages are looking for funding
+  run `npm fund` for details
 
-All commands:
+2 moderate severity vulnerabilities
 
-    access, adduser, audit, bugs, cache, ci, completion,
-    config, dedupe, deprecate, diff, dist-tag, docs, doctor,
-    edit, exec, explain, explore, find-dupes, fund, get, help,
-    help-search, hook, init, install, install-ci-test,
-    install-test, link, ll, login, logout, ls, org, outdated,
-    owner, pack, ping, pkg, prefix, profile, prune, publish,
-    query, rebuild, repo, restart, root, run-script, sbom,
-    search, set, shrinkwrap, star, stars, start, stop, team,
-    test, token, uninstall, unpublish, unstar, update, version,
-    view, whoami
+To address all issues (including breaking changes), run:
+  npm audit fix --force
 
-Specify configs in the ini-formatted file:
-    /home/oai/.npmrc
-or on the command line via: npm <command> --key=value
+Run `npm audit` for details.
 
-More configuration info: npm help config
-Configuration fields: npm help 7 config
+---BUILD---
 
-npm@10.9.2 /opt/nvm/versions/node/v22.16.0/lib/node_modules/npm
+> liftlog-v11-3-verified-backups@11.3.0 build
+> tsc && vite build
 
---- BUILD ---
-npm <command>
-
-Usage:
-
-npm install        install all the dependencies in your project
-npm install <foo>  add the <foo> dependency to your project
-npm test           run this project's tests
-npm run <foo>      run the script named <foo>
-npm <command> -h   quick help on <command>
-npm -l             display usage info for all commands
-npm help <term>    search for help on <term>
-npm help npm       more involved overview
-
-All commands:
-
-    access, adduser, audit, bugs, cache, ci, completion,
-    config, dedupe, deprecate, diff, dist-tag, docs, doctor,
-    edit, exec, explain, explore, find-dupes, fund, get, help,
-    help-search, hook, init, install, install-ci-test,
-    install-test, link, ll, login, logout, ls, org, outdated,
-    owner, pack, ping, pkg, prefix, profile, prune, publish,
-    query, rebuild, repo, restart, root, run-script, sbom,
-    search, set, shrinkwrap, star, stars, start, stop, team,
-    test, token, uninstall, unpublish, unstar, update, version,
-    view, whoami
-
-Specify configs in the ini-formatted file:
-    /home/oai/.npmrc
-or on the command line via: npm <command> --key=value
-
-More configuration info: npm help config
-Configuration fields: npm help 7 config
-
-npm@10.9.2 /opt/nvm/versions/node/v22.16.0/lib/node_modules/npm
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 1584 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[2massets/[22m[32mmanifest-DyUkWq-m.webmanifest  [39m[1m[2m  0.41 kB[22m[1m[22m
+[2mdist/[22m[32mindex.html                            [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:  0.31 kB[22m
+[2mdist/[22m[2massets/[22m[35mindex-CEvshUKz.css             [39m[1m[2m 12.23 kB[22m[1m[22m[2m │ gzip:  2.98 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-Bq8ISNWi.js              [39m[1m[2m292.65 kB[22m[1m[22m[2m │ gzip: 92.25 kB[22m
+[32m✓ built in 2.12s[39m

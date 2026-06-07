@@ -28,7 +28,7 @@ class LiftDB extends Dexie {
   sets!: Table<WorkoutSet, number>;
   backups!: Table<BackupSnapshot, number>;
   constructor() {
-    super('liftlog_v11_local_backups_db');
+    super('liftlog_v11_3_verified_backups_db');
     this.version(1).stores({
       settings: 'id',
       exercises: '++id,name,muscle,equipment',
@@ -97,7 +97,7 @@ function workoutSummary(workout: Workout | undefined, exercises: Exercise[], set
   const topMuscle = Object.entries(muscleVolumes).sort((a: [string, number], b: [string, number])=>b[1]-a[1])[0];
   const uniqueExercises = new Set(workoutSets.map(s => s.exerciseId)).size;
   const bestSet = [...workoutSets].sort((a: WorkoutSet, b: WorkoutSet)=>volumeKg(b)-volumeKg(a))[0];
-  const bestE1RMSet = [...workoutSets].sort((a,b)=>e1rm(kgValue(b), b.reps)-e1rm(kgValue(a), a.reps))[0];
+  const bestE1RMSet = [...workoutSets].sort((a: WorkoutSet, b: WorkoutSet)=>e1rm(kgValue(b), b.reps)-e1rm(kgValue(a), a.reps))[0];
   return {
     totalSets: workoutSets.length,
     totalVolume,
@@ -346,14 +346,14 @@ function RoutinesPage({data}:any){
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
   async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
   return <section><Card><h3>Create Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button></Card>
   <Card><h3>Edit Routine</h3><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3">
         <button className="secondary mini" onClick={async()=>{ 
           const r = routines.find((x:Routine)=>x.id===routineId);
           if(!r || !routineId) return;
           const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()});
-          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
           for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()});
           setRoutineId(newId);
           refresh();
@@ -409,7 +409,7 @@ function LogPage({data}:any){
     </Card>
   </section>;
 
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
   const liveSummary = workoutSummary(activeWorkout, exercises, sets);
 
@@ -591,7 +591,8 @@ function MorePage({data}:any){
 
 function SettingsPage({data}:any){const {settings,refresh}=data; 
   async function exportData(){
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-backup.json'; a.click()
+    const payload={settings:await db.settings.toArray(),exercises:await db.exercises.toArray(),subtypes:await db.subtypes.toArray(),routines:await db.routines.toArray(),routineExercises:await db.routineExercises.toArray(),workouts:await db.workouts.toArray(),sets:await db.sets.toArray()}; 
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-v9-export.json'; a.click()
   } 
   async function importData(file: File | undefined){
     if(!file) return;
@@ -634,11 +635,19 @@ async function buildLocalBackupPayload() {
 async function createBackupSnapshot(reason = 'Manual backup') {
   const payload = await buildLocalBackupPayload();
   const stamp = new Date().toLocaleString();
-  await db.backups.add({ name: `LiftLog backup - ${stamp}`, reason, createdAt: new Date().toISOString(), payload });
+  await db.backups.add({
+    name: `LiftLog backup - ${stamp}`,
+    reason,
+    createdAt: new Date().toISOString(),
+    payload
+  });
+
   const all = await db.backups.orderBy('createdAt').toArray();
   const excess = all.length - 20;
   if (excess > 0) {
-    for (const old of all.slice(0, excess)) if (old.id) await db.backups.delete(old.id);
+    for (const old of all.slice(0, excess)) {
+      if (old.id) await db.backups.delete(old.id);
+    }
   }
 }
 
@@ -679,7 +688,10 @@ function BackupPage({data}:any){
   const [backups,setBackups]=useState<BackupSnapshot[]>([]);
   const [status,setStatus]=useState('');
 
-  async function loadBackups(){ setBackups(await db.backups.orderBy('createdAt').reverse().toArray()); }
+  async function loadBackups(){
+    setBackups(await db.backups.orderBy('createdAt').reverse().toArray());
+  }
+
   useEffect(()=>{loadBackups();},[]);
 
   async function exportBackup(){
@@ -707,7 +719,9 @@ function BackupPage({data}:any){
       refresh();
       await loadBackups();
       setStatus('Import complete. Current device now uses the imported backup.');
-    }catch(err:any){ setStatus('Import failed: ' + (err.message || String(err))); }
+    }catch(err:any){
+      setStatus('Import failed: ' + (err.message || String(err)));
+    }
   }
 
   async function restoreSnapshot(snapshot: BackupSnapshot){
@@ -718,7 +732,9 @@ function BackupPage({data}:any){
       refresh();
       await loadBackups();
       setStatus('Restore complete.');
-    }catch(err:any){ setStatus('Restore failed: ' + (err.message || String(err))); }
+    }catch(err:any){
+      setStatus('Restore failed: ' + (err.message || String(err)));
+    }
   }
 
   async function deleteSnapshot(snapshot: BackupSnapshot){
@@ -730,6 +746,7 @@ function BackupPage({data}:any){
 
   return <section>
     <Card cls="hero"><h2>Local Backups</h2><p>Export JSON files, import backups, and keep the last 20 in-browser restore points. No Supabase required.</p></Card>
+
     <Card>
       <h3>Backup actions</h3>
       <button className="primary" onClick={exportBackup}>Export JSON Backup</button>
@@ -738,11 +755,15 @@ function BackupPage({data}:any){
       <p className="muted">Tip: save exported JSON files to iCloud Drive, Google Drive, OneDrive or email them to yourself.</p>
       {status && <div className="backupStatus">{status}</div>}
     </Card>
+
     <Card>
       <h3>Local restore points</h3>
       <p className="muted">LiftLog keeps up to 20 restore points in this browser. These do not transfer to other devices unless exported as JSON.</p>
       {backups.length ? backups.map(b=><div className="backupRow" key={b.id}>
-        <div><strong>{b.name}</strong><span>{b.reason} · {new Date(b.createdAt).toLocaleString()}</span></div>
+        <div>
+          <strong>{b.name}</strong>
+          <span>{b.reason} · {new Date(b.createdAt).toLocaleString()}</span>
+        </div>
         <div className="backupActions">
           <button className="smallAction" onClick={()=>downloadJson(b.payload, backupFilename())}>Download</button>
           <button className="smallAction" onClick={()=>restoreSnapshot(b)}>Restore</button>
@@ -750,9 +771,14 @@ function BackupPage({data}:any){
         </div>
       </div>) : <p className="muted">No restore points yet.</p>}
     </Card>
+
     <Card>
       <h3>Simple device transfer</h3>
-      <ol className="steps"><li>On your main device, press <strong>Export JSON Backup</strong>.</li><li>Send the file to your other device using AirDrop, iCloud Drive, email, Google Drive or OneDrive.</li><li>On the other device, press <strong>Import JSON Backup</strong>.</li></ol>
+      <ol className="steps">
+        <li>On your main device, press <strong>Export JSON Backup</strong>.</li>
+        <li>Send the file to your other device using AirDrop, iCloud Drive, email, Google Drive or OneDrive.</li>
+        <li>On the other device, press <strong>Import JSON Backup</strong>.</li>
+      </ol>
     </Card>
   </section>
 }
