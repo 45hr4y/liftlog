@@ -865,3 +865,178 @@ body[data-theme="dark"] .historySet{border-bottom-color:#1e293b}.historySet span
 body[data-theme="dark"] .prToastInline{background:#78350f;color:#fef3c7;border-color:#92400e}
 .smartTimer{gap:1px!important}.smartTimer button{padding:3px 8px!important;min-width:46px}textarea{min-height:110px;resize:vertical}
 @media(max-width:720px){.historyCard{grid-template-columns:7px 1fr}.historyStats{grid-column:2;text-align:left}}
+
+
+/* LiftLog v18 Nutrition Integration */
+.sixTabs{
+  grid-template-columns:repeat(6,1fr)!important;
+}
+.nutritionHero{
+  background:radial-gradient(circle at top right, rgba(16,185,129,.35), transparent 42%), linear-gradient(135deg,#0f172a,#164e63 60%,#065f46);
+}
+.nutritionScoreCard{
+  display:grid;
+  gap:12px;
+}
+.nutritionScoreCard span{
+  color:#64748b;
+  font-size:12px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.nutritionScoreCard strong{
+  display:block;
+  font-size:46px;
+  line-height:1;
+}
+.nutritionGrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+.habit-card .card-head{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+}
+.habit-card .card-head h3{
+  margin:0;
+}
+.habit-card .card-head strong{
+  font-size:18px;
+}
+.button-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.progress-track,.score-ring{
+  height:12px;
+  background:#e2e8f0;
+  border-radius:999px;
+  overflow:hidden;
+  margin-top:12px;
+}
+.progress-track div,.score-ring div{
+  height:100%;
+  background:linear-gradient(90deg,#2563eb,#10b981);
+  border-radius:999px;
+}
+.done-button{
+  background:#dcfce7;
+  color:#166534;
+}
+.warningText{
+  color:#ef4444;
+  font-weight:900;
+}
+.mealForm{
+  display:grid;
+  gap:10px;
+  margin-bottom:16px;
+}
+.mealList{
+  display:grid;
+  gap:10px;
+}
+.mealItem{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:12px;
+  border:1px solid #e2e8f0;
+  border-radius:20px;
+  padding:14px;
+  background:#fff;
+}
+body[data-theme="dark"] .mealItem{
+  background:#020617;
+  border-color:#1e293b;
+}
+.mealItem.great{border-color:#86efac}
+.mealItem.okay{border-color:#bfdbfe}
+.mealItem.offtrack{border-color:#fecaca}
+.mealItem span{
+  color:#64748b;
+  font-size:12px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.mealItem h3{
+  margin:4px 0;
+}
+.mealItem p{
+  color:#64748b;
+  margin:0 0 10px;
+}
+.mealTags{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.mealTags em{
+  font-style:normal;
+  background:#f1f5f9;
+  border-radius:999px;
+  padding:5px 8px;
+  font-size:12px;
+  font-weight:900;
+  color:#64748b;
+}
+body[data-theme="dark"] .mealTags em{
+  background:#1e293b;
+}
+.weekBarsNutrition{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:10px;
+  align-items:end;
+}
+.weekDayNutrition{
+  display:grid;
+  gap:8px;
+  justify-items:center;
+}
+.weekDayNutrition span{
+  font-size:12px;
+  color:#64748b;
+  font-weight:900;
+}
+.miniBar{
+  height:90px;
+  width:24px;
+  border-radius:999px;
+  background:#e2e8f0;
+  overflow:hidden;
+  display:flex;
+  align-items:end;
+}
+.miniBar div{
+  width:100%;
+  background:linear-gradient(180deg,#2563eb,#10b981);
+  border-radius:999px;
+}
+.weekDayNutrition small{
+  color:#64748b;
+  font-size:11px;
+}
+.backupPanelNutrition{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+@media(max-width:850px){
+  .nutritionGrid{
+    grid-template-columns:1fr;
+  }
+  .weekBarsNutrition{
+    gap:6px;
+  }
+  .mealItem{
+    grid-template-columns:1fr;
+  }
+  .sixTabs .tab span{
+    font-size:10px;
+  }
+}

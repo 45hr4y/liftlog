@@ -196,3 +196,16 @@ Added muscle regions:
 - Exercise notes in exercise detail
 - Smarter floating rest timer with reset/+15
 - Sleeker bottom navigation colours and glass effect
+
+
+## v18 Nutrition Integrated
+
+Added Nutrition as a built-in LiftLog page/tab:
+- Water tracking
+- Creatine tracking
+- Caffeine tracking
+- Meal accountability log
+- Protein and fruit/veg checkboxes
+- Daily reflection
+- 7-day consistency view
+- Nutrition JSON export/import

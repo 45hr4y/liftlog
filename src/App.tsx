@@ -1,11 +1,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Dexie, { Table } from 'dexie';
-import { Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2 } from 'lucide-react';
+import {Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2, Apple} from 'lucide-react';
 
 type Unit = 'kg' | 'lb';
 type Theme = 'light' | 'dark';
-type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 'log' | 'calendar' | 'history' | 'progress' | 'stats' | 'backup' | 'settings' | 'more';
+type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 'log' | 'calendar' | 'history' | 'nutrition' | 'progress' | 'stats' | 'backup' | 'settings' | 'more';
 type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
@@ -229,22 +229,24 @@ export default function App() {
       {page==='log' && <LogPage data={{settings,exercises,subtypes,routines,routineExercises,workouts,sets,activeWorkout,setActiveWorkoutId,refresh}} />}
       {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage}} />}
       {page==='history' && <HistoryPage data={{exercises,subtypes,routines,workouts,sets}} />}
+      {page==='nutrition' && <NutritionPage />}
       {page==='progress' && <ProgressPage data={{settings,exercises,subtypes,workouts,sets}} />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
       {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
     </main>
-    <nav className="tabs fiveTabs premiumTabs">
+    <nav className="tabs sixTabs premiumTabs">
       <Tab p="home" page={page} setPage={setPage} icon={<Home/>} label="Home"/>
       <Tab p="log" page={page} setPage={setPage} icon={<Play/>} label="Workout"/>
       <Tab p="calendar" page={page} setPage={setPage} icon={<CalendarDays/>} label="Calendar"/>
       <Tab p="history" page={page} setPage={setPage} icon={<ListChecks/>} label="History"/>
+      <Tab p="nutrition" page={page} setPage={setPage} icon={<Apple/>} label="Nutrition"/>
       <Tab p="more" page={page} setPage={setPage} icon={<Settings/>} label="More"/>
     </nav>
   </div>
 }
-function title(p:Page){return {home:'Dashboard',exercises:'Exercises',subtypes:'Subtypes',routines:'Routines',log:'Workout',calendar:'Calendar',history:'History',stats:'Stats',settings:'Settings',exerciseDetail:'Exercise Detail',progress:'Progress',backup:'Backup',more:'More'}[p]}
+function title(p:Page){return {home:'Dashboard',exercises:'Exercises',subtypes:'Subtypes',routines:'Routines',log:'Workout',calendar:'Calendar',history:'History',nutrition:'Nutrition',stats:'Stats',settings:'Settings',exerciseDetail:'Exercise Detail',progress:'Progress',backup:'Backup',more:'More'}[p]}
 function Tab({p,page,setPage,icon,label}:any){return <button className={page===p?'tab active':'tab'} onClick={()=>setPage(p)}>{icon}<span>{label}</span></button>}
 function Card({children, cls=''}:any){return <div className={'card '+cls}>{children}</div>}
 function Pills({children}:any){return <div className="pills">{children}</div>}
@@ -968,6 +970,112 @@ function SpiderChart({values}:{values:Record<string,number>}) {
 }
 
 
+
+type MealQuality = 'Great' | 'Okay' | 'Off-track';
+type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other';
+type MealLog = { id:string; date:string; time:string; type:MealType; title:string; notes?:string; quality:MealQuality; proteinIncluded:boolean; fruitVegIncluded:boolean };
+type DailyNutritionLog = { date:string; waterMl:number; creatineTaken:boolean; creatineGrams:number; caffeineMg:number; meals:MealLog[]; reflection?:string };
+
+const NUTRITION_STORAGE_KEY = 'liftlog-nutrition-accountability-v1';
+const nutritionToday = () => new Date().toISOString().slice(0,10);
+const nutritionUid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now()+Math.random()));
+
+function emptyNutritionDay(date:string): DailyNutritionLog {
+  return {date, waterMl:0, creatineTaken:false, creatineGrams:5, caffeineMg:0, meals:[], reflection:''};
+}
+function loadNutritionLogs(): Record<string, DailyNutritionLog> {
+  try { const raw = localStorage.getItem(NUTRITION_STORAGE_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+}
+function saveNutritionLogs(logs:Record<string, DailyNutritionLog>) {
+  localStorage.setItem(NUTRITION_STORAGE_KEY, JSON.stringify(logs));
+}
+function downloadNutritionJson(data:any, filename:string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'}));
+  a.download = filename;
+  a.click();
+}
+
+function NutritionPage(){
+  const [logs,setLogs]=useState<Record<string, DailyNutritionLog>>({});
+  const [date,setDate]=useState(nutritionToday());
+  const day = logs[date] || emptyNutritionDay(date);
+  const [mealDraft,setMealDraft]=useState({type:'Lunch' as MealType,title:'',notes:'',quality:'Okay' as MealQuality,proteinIncluded:true,fruitVegIncluded:false});
+
+  useEffect(()=>{setLogs(loadNutritionLogs())},[]);
+  function updateDay(next:DailyNutritionLog){const updated={...logs,[date]:next}; setLogs(updated); saveNutritionLogs(updated);}
+  function addWater(amount:number){updateDay({...day,waterMl:Math.max(0,day.waterMl+amount)});}
+  function addCaffeine(amount:number){updateDay({...day,caffeineMg:Math.max(0,day.caffeineMg+amount)});}
+  function toggleCreatine(){updateDay({...day,creatineTaken:!day.creatineTaken});}
+  function addMeal(){
+    if(!mealDraft.title.trim()) return;
+    const meal:MealLog={id:nutritionUid(),date,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),type:mealDraft.type,title:mealDraft.title.trim(),notes:mealDraft.notes.trim(),quality:mealDraft.quality,proteinIncluded:mealDraft.proteinIncluded,fruitVegIncluded:mealDraft.fruitVegIncluded};
+    updateDay({...day,meals:[meal,...day.meals]});
+    setMealDraft({type:'Lunch',title:'',notes:'',quality:'Okay',proteinIncluded:true,fruitVegIncluded:false});
+  }
+  function deleteMeal(id:string){updateDay({...day,meals:day.meals.filter(m=>m.id!==id)});}
+  function accountabilityScore(){
+    let score=0;
+    score += day.waterMl>=2000 ? 25 : Math.round((day.waterMl/2000)*25);
+    score += day.creatineTaken ? 20 : 0;
+    score += day.caffeineMg<=400 ? 15 : 5;
+    score += day.meals.length>=3 ? 20 : day.meals.length*6;
+    const proteinMeals=day.meals.filter(m=>m.proteinIncluded).length;
+    score += proteinMeals>=3 ? 20 : proteinMeals*6;
+    return Math.min(100, score);
+  }
+  const score=accountabilityScore();
+  const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=logs[key]||emptyNutritionDay(key); return {date:key,waterMl:entry.waterMl,meals:entry.meals.length,creatine:entry.creatineTaken,caffeineMg:entry.caffeineMg};});
+  function exportBackup(){downloadNutritionJson(logs, `LiftLog_Nutrition_Backup_${nutritionToday()}.json`);}
+  async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
+
+  return <section className="nutritionPage">
+    <Card cls="hero heroV12 nutritionHero">
+      <div className="heroTop">
+        <div><div className="eyebrow lightText">ACCOUNTABILITY</div><h2>Nutrition</h2><p>Track water, creatine, caffeine and meals without strict calorie counting.</p></div>
+        <div className="heroBadge">🍎</div>
+      </div>
+    </Card>
+
+    <Card cls="nutritionScoreCard">
+      <div><span>Daily accountability</span><strong>{score}%</strong></div>
+      <input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+      <div className="score-ring"><div style={{width:`${score}%`}} /></div>
+    </Card>
+
+    <div className="nutritionGrid">
+      <Card cls="habit-card water-card"><div className="card-head"><h3>Water</h3><strong>{day.waterMl} ml</strong></div><p className="muted">Goal: 2,000–3,000 ml</p><div className="button-row"><button onClick={()=>addWater(250)}>+250</button><button onClick={()=>addWater(500)}>+500</button><button onClick={()=>addWater(-250)}>-250</button></div><div className="progress-track"><div style={{width:`${Math.min(100,(day.waterMl/2500)*100)}%`}} /></div></Card>
+      <Card cls="habit-card"><div className="card-head"><h3>Creatine</h3><strong>{day.creatineTaken?'Done':'Not yet'}</strong></div><p className="muted">Default dose: {day.creatineGrams} g</p><button className={day.creatineTaken?'done-button':'primary'} onClick={toggleCreatine}>{day.creatineTaken?'Creatine taken ✓':'Mark creatine taken'}</button></Card>
+      <Card cls="habit-card caffeine-card"><div className="card-head"><h3>Caffeine</h3><strong>{day.caffeineMg} mg</strong></div><p className="muted">Soft limit: 400 mg/day</p><div className="button-row"><button onClick={()=>addCaffeine(80)}>+80</button><button onClick={()=>addCaffeine(150)}>+150</button><button onClick={()=>addCaffeine(200)}>+200</button><button onClick={()=>addCaffeine(-80)}>-80</button></div>{day.caffeineMg>400&&<p className="warningText">High caffeine day. Consider stopping here.</p>}</Card>
+    </div>
+
+    <Card cls="mealPanel">
+      <div className="sectionHeader"><div><h3>Meal Log</h3><p className="muted">No calories. Just accountability.</p></div></div>
+      <div className="mealForm">
+        <select value={mealDraft.type} onChange={e=>setMealDraft({...mealDraft,type:e.target.value as MealType})}><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Other</option></select>
+        <input value={mealDraft.title} onChange={e=>setMealDraft({...mealDraft,title:e.target.value})} placeholder="What did you eat?"/>
+        <textarea value={mealDraft.notes} onChange={e=>setMealDraft({...mealDraft,notes:e.target.value})} placeholder="Notes e.g. portion, cravings, mood, eating out..."/>
+        <select value={mealDraft.quality} onChange={e=>setMealDraft({...mealDraft,quality:e.target.value as MealQuality})}><option>Great</option><option>Okay</option><option>Off-track</option></select>
+        <label className="checkLine"><input type="checkbox" checked={mealDraft.proteinIncluded} onChange={e=>setMealDraft({...mealDraft,proteinIncluded:e.target.checked})}/> Protein included</label>
+        <label className="checkLine"><input type="checkbox" checked={mealDraft.fruitVegIncluded} onChange={e=>setMealDraft({...mealDraft,fruitVegIncluded:e.target.checked})}/> Fruit/veg included</label>
+        <button className="primary" onClick={addMeal}>Add Meal</button>
+      </div>
+      <div className="mealList">
+        {day.meals.length ? day.meals.map(meal=><div className={`mealItem ${meal.quality.toLowerCase().replace('-','')}`} key={meal.id}><div><span>{meal.type} · {meal.time}</span><h3>{meal.title}</h3>{meal.notes&&<p>{meal.notes}</p>}<div className="mealTags"><em>{meal.quality}</em>{meal.proteinIncluded&&<em>Protein</em>}{meal.fruitVegIncluded&&<em>Fruit/Veg</em>}</div></div><button onClick={()=>deleteMeal(meal.id)}>Delete</button></div>) : <p className="muted">No meals logged yet today.</p>}
+      </div>
+    </Card>
+
+    <Card><h3>Daily Reflection</h3><textarea value={day.reflection||''} onChange={e=>updateDay({...day,reflection:e.target.value})} placeholder="What went well? What made eating harder today? What is one better choice tomorrow?"/></Card>
+
+    <Card>
+      <div className="sectionHeader"><h3>Last 7 Days</h3><p className="muted">Water and meal consistency.</p></div>
+      <div className="weekBarsNutrition">{weekStats.map(d=><div className="weekDayNutrition" key={d.date}><span>{new Date(d.date).toLocaleDateString([],{weekday:'short'})}</span><div className="miniBar"><div style={{height:`${Math.min(100,(d.waterMl/2500)*100)}%`}} /></div><small>{d.meals} meals</small></div>)}</div>
+    </Card>
+
+    <Card cls="backupPanelNutrition"><button onClick={exportBackup}>Export Nutrition JSON</button><label className="secondary">Import Nutrition JSON<input hidden type="file" accept="application/json" onChange={e=>importBackup(e.target.files?.[0])}/></label></Card>
+  </section>
+}
+
 function MorePage({data}:any){
   const {setPage, exercises, subtypes, routines}=data;
   const items = [
@@ -975,6 +1083,7 @@ function MorePage({data}:any){
     {title:'Machine Subtypes', subtitle:`${subtypes.length} saved`, page:'subtypes'},
     {title:'Routines', subtitle:`${routines.length} templates`, page:'routines'},
     {title:'Stats', subtitle:'Spider chart and weekly volume', page:'stats'},
+    {title:'Nutrition', subtitle:'Water, creatine, caffeine and meals', page:'nutrition'},
     {title:'Backups', subtitle:'Export, import and restore points', page:'backup'},
     {title:'Settings', subtitle:'Theme, unit and local data', page:'settings'}
   ];
