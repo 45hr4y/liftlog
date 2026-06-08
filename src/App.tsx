@@ -974,7 +974,7 @@ function SpiderChart({values}:{values:Record<string,number>}) {
 type MealQuality = 'Great' | 'Okay' | 'Off-track';
 type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other';
 type MealLog = { id:string; date:string; time:string; type:MealType; title:string; notes?:string; quality:MealQuality; proteinIncluded:boolean; fruitVegIncluded:boolean };
-type DailyNutritionLog = { date:string; waterMl:number; creatineTaken:boolean; creatineGrams:number; caffeineMg:number; meals:MealLog[]; reflection?:string };
+type DailyNutritionLog = { date:string; waterMl:number; creatineTaken:boolean; creatineGrams:number; caffeineMg:number; caffeineLastAt?:string; proteinServings?:number; proteinTarget?:number; meals:MealLog[]; reflection?:string };
 
 const NUTRITION_STORAGE_KEY = 'liftlog-nutrition-accountability-v1';
 const nutritionToday = () => new Date().toISOString().slice(0,10);
@@ -996,85 +996,101 @@ function downloadNutritionJson(data:any, filename:string) {
   a.click();
 }
 
+
+function nutritionScoreV19(day: DailyNutritionLog) {
+  const protein = day.proteinServings ?? day.meals.filter(m=>m.proteinIncluded).length;
+  const target = day.proteinTarget ?? 3;
+  let score = 0;
+  score += day.waterMl >= 2000 ? 22 : Math.round((day.waterMl/2000)*22);
+  score += day.creatineTaken ? 18 : 0;
+  score += day.caffeineMg <= 400 ? 12 : 4;
+  score += day.meals.length >= 3 ? 18 : day.meals.length * 6;
+  score += protein >= target ? 20 : Math.round((protein/Math.max(1,target))*20);
+  score += Math.min(10, day.meals.filter(m=>m.quality==='Great').length*4);
+  return Math.min(100, score);
+}
+function normaliseNutritionDay(day: DailyNutritionLog): DailyNutritionLog {
+  return {
+    ...day,
+    proteinServings: day.proteinServings ?? day.meals.filter(m=>m.proteinIncluded).length,
+    proteinTarget: day.proteinTarget ?? 3,
+    caffeineLastAt: day.caffeineLastAt ?? ''
+  };
+}
 function NutritionPage(){
   const [logs,setLogs]=useState<Record<string, DailyNutritionLog>>({});
   const [date,setDate]=useState(nutritionToday());
-  const day = logs[date] || emptyNutritionDay(date);
+  const rawDay = logs[date] || emptyNutritionDay(date);
+  const day = normaliseNutritionDay(rawDay);
   const [mealDraft,setMealDraft]=useState({type:'Lunch' as MealType,title:'',notes:'',quality:'Okay' as MealQuality,proteinIncluded:true,fruitVegIncluded:false});
 
   useEffect(()=>{setLogs(loadNutritionLogs())},[]);
-  function updateDay(next:DailyNutritionLog){const updated={...logs,[date]:next}; setLogs(updated); saveNutritionLogs(updated);}
+  function updateDay(next:DailyNutritionLog){const updated={...logs,[date]:normaliseNutritionDay(next)}; setLogs(updated); saveNutritionLogs(updated);}
   function addWater(amount:number){updateDay({...day,waterMl:Math.max(0,day.waterMl+amount)});}
-  function addCaffeine(amount:number){updateDay({...day,caffeineMg:Math.max(0,day.caffeineMg+amount)});}
+  function addCaffeine(amount:number){updateDay({...day,caffeineMg:Math.max(0,day.caffeineMg+amount),caffeineLastAt:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});}
   function toggleCreatine(){updateDay({...day,creatineTaken:!day.creatineTaken});}
+  function addProtein(amount:number){updateDay({...day,proteinServings:Math.max(0,(day.proteinServings||0)+amount)});}
   function addMeal(){
     if(!mealDraft.title.trim()) return;
     const meal:MealLog={id:nutritionUid(),date,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),type:mealDraft.type,title:mealDraft.title.trim(),notes:mealDraft.notes.trim(),quality:mealDraft.quality,proteinIncluded:mealDraft.proteinIncluded,fruitVegIncluded:mealDraft.fruitVegIncluded};
-    updateDay({...day,meals:[meal,...day.meals]});
+    updateDay({...day,meals:[meal,...day.meals],proteinServings:(day.proteinServings||0)+(meal.proteinIncluded?1:0)});
     setMealDraft({type:'Lunch',title:'',notes:'',quality:'Okay',proteinIncluded:true,fruitVegIncluded:false});
   }
-  function deleteMeal(id:string){updateDay({...day,meals:day.meals.filter(m=>m.id!==id)});}
-  function accountabilityScore(){
-    let score=0;
-    score += day.waterMl>=2000 ? 25 : Math.round((day.waterMl/2000)*25);
-    score += day.creatineTaken ? 20 : 0;
-    score += day.caffeineMg<=400 ? 15 : 5;
-    score += day.meals.length>=3 ? 20 : day.meals.length*6;
-    const proteinMeals=day.meals.filter(m=>m.proteinIncluded).length;
-    score += proteinMeals>=3 ? 20 : proteinMeals*6;
-    return Math.min(100, score);
+  function deleteMeal(id:string){
+    const meal=day.meals.find(m=>m.id===id);
+    updateDay({...day,meals:day.meals.filter(m=>m.id!==id),proteinServings:Math.max(0,(day.proteinServings||0)-(meal?.proteinIncluded?1:0))});
   }
-  const score=accountabilityScore();
-  const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=logs[key]||emptyNutritionDay(key); return {date:key,waterMl:entry.waterMl,meals:entry.meals.length,creatine:entry.creatineTaken,caffeineMg:entry.caffeineMg};});
+
+  const score=nutritionScoreV19(day);
+  const protein = day.proteinServings || 0;
+  const proteinTarget = day.proteinTarget || 3;
+  const qualityCounts={great:day.meals.filter(m=>m.quality==='Great').length, okay:day.meals.filter(m=>m.quality==='Okay').length, off:day.meals.filter(m=>m.quality==='Off-track').length};
+  const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
+  const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
+  const nextSuggestion=score>=85?'Strong day. Repeat the basics tomorrow.':day.waterMl<1500?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':'Write a quick reflection.';
   function exportBackup(){downloadNutritionJson(logs, `LiftLog_Nutrition_Backup_${nutritionToday()}.json`);}
   async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
 
-  return <section className="nutritionPage">
-    <Card cls="hero heroV12 nutritionHero">
-      <div className="heroTop">
-        <div><div className="eyebrow lightText">ACCOUNTABILITY</div><h2>Nutrition</h2><p>Track water, creatine, caffeine and meals without strict calorie counting.</p></div>
-        <div className="heroBadge">🍎</div>
+  return <section className="nutritionPage nutritionPro">
+    <Card cls="hero nutritionHeroPro">
+      <div className="nutritionHeroGrid">
+        <div><div className="eyebrow lightText">NUTRITION ACCOUNTABILITY</div><h2>Fuel Dashboard</h2><p>Track water, creatine, caffeine, protein and meals without calorie obsession.</p></div>
+        <div className="nutritionOrb"><span>{score}%</span><em>Today</em></div>
       </div>
     </Card>
 
-    <Card cls="nutritionScoreCard">
-      <div><span>Daily accountability</span><strong>{score}%</strong></div>
-      <input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
-      <div className="score-ring"><div style={{width:`${score}%`}} /></div>
-    </Card>
+    <Card cls="nutritionCommandCard"><div><span>Today's focus</span><strong>{nextSuggestion}</strong></div><input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/></Card>
 
-    <div className="nutritionGrid">
-      <Card cls="habit-card water-card"><div className="card-head"><h3>Water</h3><strong>{day.waterMl} ml</strong></div><p className="muted">Goal: 2,000–3,000 ml</p><div className="button-row"><button onClick={()=>addWater(250)}>+250</button><button onClick={()=>addWater(500)}>+500</button><button onClick={()=>addWater(-250)}>-250</button></div><div className="progress-track"><div style={{width:`${Math.min(100,(day.waterMl/2500)*100)}%`}} /></div></Card>
-      <Card cls="habit-card"><div className="card-head"><h3>Creatine</h3><strong>{day.creatineTaken?'Done':'Not yet'}</strong></div><p className="muted">Default dose: {day.creatineGrams} g</p><button className={day.creatineTaken?'done-button':'primary'} onClick={toggleCreatine}>{day.creatineTaken?'Creatine taken ✓':'Mark creatine taken'}</button></Card>
-      <Card cls="habit-card caffeine-card"><div className="card-head"><h3>Caffeine</h3><strong>{day.caffeineMg} mg</strong></div><p className="muted">Soft limit: 400 mg/day</p><div className="button-row"><button onClick={()=>addCaffeine(80)}>+80</button><button onClick={()=>addCaffeine(150)}>+150</button><button onClick={()=>addCaffeine(200)}>+200</button><button onClick={()=>addCaffeine(-80)}>-80</button></div>{day.caffeineMg>400&&<p className="warningText">High caffeine day. Consider stopping here.</p>}</Card>
+    <div className="nutritionProGrid">
+      <Card cls="nutritionMetric hydration"><div className="metricIcon">💧</div><span>Hydration</span><strong>{day.waterMl} ml</strong><p>{Math.round(Math.min(100,(day.waterMl/2500)*100))}% of 2.5L target</p><div className="button-row"><button onClick={()=>addWater(250)}>+250</button><button onClick={()=>addWater(500)}>+500</button><button onClick={()=>addWater(-250)}>-250</button></div><div className="progress-track"><div style={{width:`${Math.min(100,(day.waterMl/2500)*100)}%`}} /></div></Card>
+      <Card cls="nutritionMetric creatine"><div className="metricIcon">⚡</div><span>Creatine</span><strong>{day.creatineTaken?'Taken':'Pending'}</strong><p>{creatineStreak} day streak · {day.creatineGrams}g default</p><button className={day.creatineTaken?'done-button':'primary'} onClick={toggleCreatine}>{day.creatineTaken?'Creatine taken ✓':'Mark taken'}</button></Card>
+      <Card cls="nutritionMetric caffeine"><div className="metricIcon">☕</div><span>Caffeine</span><strong>{day.caffeineMg} mg</strong><p>{day.caffeineLastAt?`Last logged ${day.caffeineLastAt}`:'Soft limit: 400 mg/day'}</p><div className="button-row"><button onClick={()=>addCaffeine(80)}>+80</button><button onClick={()=>addCaffeine(150)}>+150</button><button onClick={()=>addCaffeine(200)}>+200</button><button onClick={()=>addCaffeine(-80)}>-80</button></div>{day.caffeineMg>400&&<p className="warningText">High caffeine day. Consider stopping here.</p>}</Card>
+      <Card cls="nutritionMetric protein"><div className="metricIcon">🥩</div><span>Protein servings</span><strong>{protein}/{proteinTarget}</strong><p>Simple serving target, not macro tracking.</p><div className="button-row"><button onClick={()=>addProtein(1)}>+1</button><button onClick={()=>addProtein(-1)}>-1</button><button onClick={()=>updateDay({...day,proteinTarget:proteinTarget+1})}>Target +</button><button onClick={()=>updateDay({...day,proteinTarget:Math.max(1,proteinTarget-1)})}>Target -</button></div></Card>
     </div>
 
-    <Card cls="mealPanel">
-      <div className="sectionHeader"><div><h3>Meal Log</h3><p className="muted">No calories. Just accountability.</p></div></div>
-      <div className="mealForm">
+    <Card cls="mealPanelPro">
+      <div className="sectionHeader"><div><h3>Meal Accountability</h3><p className="muted">Log enough to stay honest, not enough to obsess.</p></div><div className="qualityPills"><span className="good">{qualityCounts.great} great</span><span>{qualityCounts.okay} okay</span><span className="bad">{qualityCounts.off} off-track</span></div></div>
+      <div className="mealFormPro">
         <select value={mealDraft.type} onChange={e=>setMealDraft({...mealDraft,type:e.target.value as MealType})}><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Other</option></select>
         <input value={mealDraft.title} onChange={e=>setMealDraft({...mealDraft,title:e.target.value})} placeholder="What did you eat?"/>
-        <textarea value={mealDraft.notes} onChange={e=>setMealDraft({...mealDraft,notes:e.target.value})} placeholder="Notes e.g. portion, cravings, mood, eating out..."/>
         <select value={mealDraft.quality} onChange={e=>setMealDraft({...mealDraft,quality:e.target.value as MealQuality})}><option>Great</option><option>Okay</option><option>Off-track</option></select>
+        <textarea value={mealDraft.notes} onChange={e=>setMealDraft({...mealDraft,notes:e.target.value})} placeholder="Quick note: portion, cravings, mood, eating out..."/>
         <label className="checkLine"><input type="checkbox" checked={mealDraft.proteinIncluded} onChange={e=>setMealDraft({...mealDraft,proteinIncluded:e.target.checked})}/> Protein included</label>
         <label className="checkLine"><input type="checkbox" checked={mealDraft.fruitVegIncluded} onChange={e=>setMealDraft({...mealDraft,fruitVegIncluded:e.target.checked})}/> Fruit/veg included</label>
         <button className="primary" onClick={addMeal}>Add Meal</button>
       </div>
-      <div className="mealList">
-        {day.meals.length ? day.meals.map(meal=><div className={`mealItem ${meal.quality.toLowerCase().replace('-','')}`} key={meal.id}><div><span>{meal.type} · {meal.time}</span><h3>{meal.title}</h3>{meal.notes&&<p>{meal.notes}</p>}<div className="mealTags"><em>{meal.quality}</em>{meal.proteinIncluded&&<em>Protein</em>}{meal.fruitVegIncluded&&<em>Fruit/Veg</em>}</div></div><button onClick={()=>deleteMeal(meal.id)}>Delete</button></div>) : <p className="muted">No meals logged yet today.</p>}
-      </div>
+      <div className="mealTimeline">{day.meals.length ? day.meals.map(meal=><div className={`mealItemPro ${meal.quality.toLowerCase().replace('-','')}`} key={meal.id}><div className="mealDot"/><div><span>{meal.type} · {meal.time}</span><h3>{meal.title}</h3>{meal.notes&&<p>{meal.notes}</p>}<div className="mealTags"><em>{meal.quality}</em>{meal.proteinIncluded&&<em>Protein</em>}{meal.fruitVegIncluded&&<em>Fruit/Veg</em>}</div></div><button onClick={()=>deleteMeal(meal.id)}>Delete</button></div>) : <p className="muted">No meals logged yet today.</p>}</div>
     </Card>
 
-    <Card><h3>Daily Reflection</h3><textarea value={day.reflection||''} onChange={e=>updateDay({...day,reflection:e.target.value})} placeholder="What went well? What made eating harder today? What is one better choice tomorrow?"/></Card>
-
-    <Card>
-      <div className="sectionHeader"><h3>Last 7 Days</h3><p className="muted">Water and meal consistency.</p></div>
-      <div className="weekBarsNutrition">{weekStats.map(d=><div className="weekDayNutrition" key={d.date}><span>{new Date(d.date).toLocaleDateString([],{weekday:'short'})}</span><div className="miniBar"><div style={{height:`${Math.min(100,(d.waterMl/2500)*100)}%`}} /></div><small>{d.meals} meals</small></div>)}</div>
-    </Card>
+    <div className="nutritionReviewGrid">
+      <Card><h3>Daily Reflection</h3><textarea value={day.reflection||''} onChange={e=>updateDay({...day,reflection:e.target.value})} placeholder="What went well? What made eating harder today? What is one better choice tomorrow?"/></Card>
+      <Card><h3>Weekly Consistency</h3><div className="weekBarsNutrition pro">{weekStats.map(d=><div className="weekDayNutrition" key={d.date}><span>{new Date(d.date).toLocaleDateString([],{weekday:'short'})}</span><div className="miniBar"><div style={{height:`${Math.min(100,(d.points/4)*100)}%`}} /></div><small>{d.points}/4</small></div>)}</div></Card>
+    </div>
 
     <Card cls="backupPanelNutrition"><button onClick={exportBackup}>Export Nutrition JSON</button><label className="secondary">Import Nutrition JSON<input hidden type="file" accept="application/json" onChange={e=>importBackup(e.target.files?.[0])}/></label></Card>
   </section>
 }
+
 
 function MorePage({data}:any){
   const {setPage, exercises, subtypes, routines}=data;

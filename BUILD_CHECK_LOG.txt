@@ -1,5 +1,5 @@
 
-added 70 packages, and audited 71 packages in 7s
+added 70 packages, and audited 71 packages in 14s
 
 7 packages are looking for funding
   run `npm fund` for details
@@ -13,7 +13,7 @@ Run `npm audit` for details.
 
 ---BUILD---
 
-> liftlog-v18-nutrition-integrated@18.0.0 build
+> liftlog-v19-nutrition-pro@19.0.0 build
 > tsc && vite build
 
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
@@ -23,6 +23,6 @@ rendering chunks...
 computing gzip size...
 [2mdist/[22m[2massets/[22m[32mmanifest-DyUkWq-m.webmanifest  [39m[1m[2m  0.41 kB[22m[1m[22m
 [2mdist/[22m[32mindex.html                            [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:  0.31 kB[22m
-[2mdist/[22m[2massets/[22m[35mindex-a7CjqEQi.css             [39m[1m[2m 29.88 kB[22m[1m[22m[2m │ gzip:  6.51 kB[22m
-[2mdist/[22m[2massets/[22m[36mindex-BNWbxvn7.js              [39m[1m[2m316.59 kB[22m[1m[22m[2m │ gzip: 99.10 kB[22m
-[32m✓ built in 3.92s[39m
+[2mdist/[22m[2massets/[22m[35mindex-EleWSc5C.css             [39m[1m[2m 33.42 kB[22m[1m[22m[2m │ gzip:  7.09 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-SyIcyHSz.js              [39m[1m[2m318.84 kB[22m[1m[22m[2m │ gzip: 99.75 kB[22m
+[32m✓ built in 4.88s[39m

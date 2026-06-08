@@ -209,3 +209,12 @@ Added Nutrition as a built-in LiftLog page/tab:
 - Daily reflection
 - 7-day consistency view
 - Nutrition JSON export/import
+
+
+## v19 Nutrition Pro
+- Premium nutrition dashboard UI
+- Protein serving target without calorie tracking
+- Creatine streak
+- Caffeine last logged time
+- Meal quality summary
+- Weekly consistency review
