@@ -124,7 +124,7 @@ function workoutDurationMinutes(workout: Workout | undefined) {
 const convert = (v: number, from: Unit, to: Unit) => from === to ? v : from === 'kg' ? v * 2.2046226218 : v / 2.2046226218;
 const e1rm = (w: number, r: number) => Math.round(w * (1 + r/30) * 10) / 10;
 
-const muscles = ['Abs','Obliques','Hamstrings','Quadriceps','Calves','Glutes','Chest','Front Delt','Rear Delt','Side Delt','Triceps','Upper Back','Erectors','Lats','Biceps','Other'];
+const muscles = ['Traps','Erectors','Upper Back','Lats','Rear Delt','Side Delt','Front Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Calves','Glutes','Biceps','Triceps','Forearms','Chest','Other'];
 const equipment = ['Machine','Cable','Dumbbell','Barbell','Smith Machine','Bodyweight','Other'];
 const colours = ['#7c3aed','#2563eb','#16a34a','#dc2626','#ea580c','#0891b2','#db2777','#4b5563'];
 
@@ -265,10 +265,10 @@ function groupVolumesForWeek(exercises: Exercise[], workouts: Workout[], sets: W
     const m = ex.muscle;
     const bucket =
       ['Chest'].includes(m) ? 'Chest' :
-      ['Upper Back','Erectors','Lats'].includes(m) ? 'Back' :
+      ['Upper Back','Erectors','Lats','Traps'].includes(m) ? 'Back' :
       ['Front Delt','Rear Delt','Side Delt','Shoulders'].includes(m) ? 'Shoulders' :
-      ['Hamstrings','Quadriceps','Calves','Glutes'].includes(m) ? 'Legs' :
-      ['Biceps','Triceps'].includes(m) ? 'Arms' :
+      ['Hamstrings','Quadriceps','Calves','Glutes','Adductors','Abductors'].includes(m) ? 'Legs' :
+      ['Biceps','Triceps','Forearms'].includes(m) ? 'Arms' :
       ['Abs','Obliques','Core'].includes(m) ? 'Core' : 'Core';
     groups[bucket] += volumeKg(s);
   });
@@ -307,11 +307,11 @@ function heatIntensityClass(value: number, max: number) {
 
 function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: WorkoutSet[]) {
   const values: Record<string, number> = {
-    Chest:0, Abs:0, Obliques:0,
-    FrontDelt:0, SideDelt:0, RearDelt:0,
-    Biceps:0, Triceps:0,
-    Quads:0, Hamstrings:0, Calves:0, Glutes:0,
-    UpperBack:0, Lats:0, Erectors:0
+    Chest:0, Traps:0, Erectors:0, UpperBack:0, Lats:0,
+    RearDelt:0, SideDelt:0, FrontDelt:0,
+    Abs:0, Obliques:0,
+    Quads:0, Hamstrings:0, Adductors:0, Abductors:0, Calves:0, Glutes:0,
+    Biceps:0, Triceps:0, Forearms:0
   };
   const weekWorkouts = workoutsThisWeek(workouts);
   const weekSets = sets.filter(s => weekWorkouts.some(w => w.id === s.workoutId));
@@ -319,72 +319,120 @@ function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: Work
     const ex = exercises.find(e => e.id === s.exerciseId);
     if (!ex) return;
     const v = volumeKg(s);
-    if (ex.muscle === 'Chest') values.Chest += v;
-    if (ex.muscle === 'Abs') values.Abs += v;
-    if (ex.muscle === 'Obliques') values.Obliques += v;
-    if (ex.muscle === 'Front Delt') values.FrontDelt += v;
-    if (ex.muscle === 'Side Delt') values.SideDelt += v;
-    if (ex.muscle === 'Rear Delt') values.RearDelt += v;
-    if (ex.muscle === 'Biceps') values.Biceps += v;
-    if (ex.muscle === 'Triceps') values.Triceps += v;
-    if (ex.muscle === 'Quadriceps') values.Quads += v;
-    if (ex.muscle === 'Hamstrings') values.Hamstrings += v;
-    if (ex.muscle === 'Calves') values.Calves += v;
-    if (ex.muscle === 'Glutes') values.Glutes += v;
-    if (ex.muscle === 'Upper Back') values.UpperBack += v;
-    if (ex.muscle === 'Lats') values.Lats += v;
-    if (ex.muscle === 'Erectors') values.Erectors += v;
+    const m = ex.muscle;
+    if (m === 'Chest') values.Chest += v;
+    if (m === 'Traps') values.Traps += v;
+    if (m === 'Erectors') values.Erectors += v;
+    if (m === 'Upper Back') values.UpperBack += v;
+    if (m === 'Lats') values.Lats += v;
+    if (m === 'Front Delt') values.FrontDelt += v;
+    if (m === 'Side Delt') values.SideDelt += v;
+    if (m === 'Rear Delt') values.RearDelt += v;
+    if (m === 'Abs') values.Abs += v;
+    if (m === 'Obliques') values.Obliques += v;
+    if (m === 'Quadriceps') values.Quads += v;
+    if (m === 'Hamstrings') values.Hamstrings += v;
+    if (m === 'Adductors') values.Adductors += v;
+    if (m === 'Abductors') values.Abductors += v;
+    if (m === 'Calves') values.Calves += v;
+    if (m === 'Glutes') values.Glutes += v;
+    if (m === 'Biceps') values.Biceps += v;
+    if (m === 'Triceps') values.Triceps += v;
+    if (m === 'Forearms') values.Forearms += v;
   });
   return values;
 }
 
 function BodyHeatMap({values}:{values:Record<string, number>}) {
   const max = Math.max(...Object.values(values), 1);
-  const cls = (key:string) => `bodyPart ${heatIntensityClass(values[key] || 0, max)}`;
-  return <div className="bodyHeatWrap">
-    <div className="bodyFigure">
-      <div className="bodyTitle">Front</div>
-      <div className="person">
-        <div className="head"/>
-        <div className="torso">
-          <div className={cls('Chest') + ' chest'} title="Chest"/>
-          <div className={cls('Abs') + ' abs'} title="Abs"/>
-          <div className={cls('Obliques') + ' oblique left'} title="Obliques"/>
-          <div className={cls('Obliques') + ' oblique right'} title="Obliques"/>
-        </div>
-        <div className={cls('FrontDelt') + ' delt front left'} title="Front delt"/>
-        <div className={cls('FrontDelt') + ' delt front right'} title="Front delt"/>
-        <div className={cls('SideDelt') + ' sideDelt left'} title="Side delt"/>
-        <div className={cls('SideDelt') + ' sideDelt right'} title="Side delt"/>
-        <div className={cls('Biceps') + ' arm biceps left'} title="Biceps"/>
-        <div className={cls('Biceps') + ' arm biceps right'} title="Biceps"/>
-        <div className={cls('Quads') + ' leg quad left'} title="Quadriceps"/>
-        <div className={cls('Quads') + ' leg quad right'} title="Quadriceps"/>
-        <div className={cls('Calves') + ' calf left'} title="Calves"/>
-        <div className={cls('Calves') + ' calf right'} title="Calves"/>
-      </div>
+  const cls = (key:string) => `hmPart ${heatIntensityClass(values[key] || 0, max)}`;
+  const label = (key:string, name:string) => <div className="hmLabel"><span className={heatIntensityClass(values[key] || 0, max)}></span>{name}<em>{fmtVol(values[key]||0)}</em></div>;
+
+  return <div className="proHeatMap">
+    <div className="hmBodies">
+      <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Front body muscle heat map">
+        <text x="140" y="24" textAnchor="middle" className="hmTitle">FRONT</text>
+        <ellipse cx="140" cy="62" rx="34" ry="42" className="hmBase"/>
+        <path d="M118 98 C118 122, 105 126, 95 146 L185 146 C175 126,162 122,162 98 Z" className="hmBase"/>
+        <path d="M90 150 C70 170,55 210,48 260" className="hmLimb"/>
+        <path d="M190 150 C210 170,225 210,232 260" className="hmLimb"/>
+        <path d="M102 390 C95 435,93 470,90 505" className="hmLimb"/>
+        <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
+        <path className={cls('Chest')} d="M100 150 C112 138,132 141,136 154 L136 204 C119 204,105 194,98 176 Z"/>
+        <path className={cls('Chest')} d="M180 150 C168 138,148 141,144 154 L144 204 C161 204,175 194,182 176 Z"/>
+        <path className={cls('FrontDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
+        <path className={cls('FrontDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
+        <path className={cls('SideDelt')} d="M55 197 C44 219,39 242,42 264 C59 260,70 231,72 203 Z"/>
+        <path className={cls('SideDelt')} d="M225 197 C236 219,241 242,238 264 C221 260,210 231,208 203 Z"/>
+        <path className={cls('Biceps')} d="M42 264 C42 292,51 319,65 335 C78 312,77 281,70 258 Z"/>
+        <path className={cls('Biceps')} d="M238 264 C238 292,229 319,215 335 C202 312,203 281,210 258 Z"/>
+        <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
+        <path className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
+        <path className={cls('Abs')} d="M113 210 C122 203,134 203,138 214 L138 316 C122 314,111 296,108 262 Z"/>
+        <path className={cls('Abs')} d="M167 210 C158 203,146 203,142 214 L142 316 C158 314,169 296,172 262 Z"/>
+        <path className={cls('Obliques')} d="M100 210 C92 242,91 282,109 316 C113 275,113 240,110 213 Z"/>
+        <path className={cls('Obliques')} d="M180 210 C188 242,189 282,171 316 C167 275,167 240,170 213 Z"/>
+        <path className={cls('Abductors')} d="M94 318 C82 347,85 382,105 402 C116 376,120 347,116 321 Z"/>
+        <path className={cls('Abductors')} d="M186 318 C198 347,195 382,175 402 C164 376,160 347,164 321 Z"/>
+        <path className={cls('Adductors')} d="M119 320 C116 352,121 382,135 405 C142 374,142 344,137 321 Z"/>
+        <path className={cls('Adductors')} d="M161 320 C164 352,159 382,145 405 C138 374,138 344,143 321 Z"/>
+        <path className={cls('Quads')} d="M95 402 C97 443,108 473,124 489 C140 455,136 424,126 402 Z"/>
+        <path className={cls('Quads')} d="M185 402 C183 443,172 473,156 489 C140 455,144 424,154 402 Z"/>
+        <path className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
+        <path className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
+      </svg>
+
+      <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Back body muscle heat map">
+        <text x="140" y="24" textAnchor="middle" className="hmTitle">BACK</text>
+        <ellipse cx="140" cy="62" rx="34" ry="42" className="hmBase"/>
+        <path d="M118 98 C118 122, 105 126, 95 146 L185 146 C175 126,162 122,162 98 Z" className="hmBase"/>
+        <path d="M90 150 C70 170,55 210,48 260" className="hmLimb"/>
+        <path d="M190 150 C210 170,225 210,232 260" className="hmLimb"/>
+        <path d="M102 390 C95 435,93 470,90 505" className="hmLimb"/>
+        <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
+        <path className={cls('Traps')} d="M106 136 C118 111,132 110,138 140 L138 238 C119 213,105 177,96 148 Z"/>
+        <path className={cls('Traps')} d="M174 136 C162 111,148 110,142 140 L142 238 C161 213,175 177,184 148 Z"/>
+        <path className={cls('UpperBack')} d="M98 150 C118 157,130 176,138 224 C117 218,101 195,92 166 Z"/>
+        <path className={cls('UpperBack')} d="M182 150 C162 157,150 176,142 224 C163 218,179 195,188 166 Z"/>
+        <path className={cls('RearDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
+        <path className={cls('RearDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
+        <path className={cls('Triceps')} d="M55 198 C42 230,43 287,66 334 C79 300,75 244,70 205 Z"/>
+        <path className={cls('Triceps')} d="M225 198 C238 230,237 287,214 334 C201 300,205 244,210 205 Z"/>
+        <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
+        <path className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
+        <path className={cls('Lats')} d="M96 198 C109 226,113 260,108 303 C92 283,83 239,88 202 Z"/>
+        <path className={cls('Lats')} d="M184 198 C171 226,167 260,172 303 C188 283,197 239,192 202 Z"/>
+        <path className={cls('Erectors')} d="M124 222 C134 225,138 245,138 318 C126 309,121 278,120 237 Z"/>
+        <path className={cls('Erectors')} d="M156 222 C146 225,142 245,142 318 C154 309,159 278,160 237 Z"/>
+        <path className={cls('Glutes')} d="M96 318 C116 309,134 319,139 341 C135 374,116 388,96 373 Z"/>
+        <path className={cls('Glutes')} d="M184 318 C164 309,146 319,141 341 C145 374,164 388,184 373 Z"/>
+        <path className={cls('Hamstrings')} d="M96 392 C96 436,107 472,126 489 C139 448,134 415,123 391 Z"/>
+        <path className={cls('Hamstrings')} d="M184 392 C184 436,173 472,154 489 C141 448,146 415,157 391 Z"/>
+        <path className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
+        <path className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
+      </svg>
     </div>
 
-    <div className="bodyFigure">
-      <div className="bodyTitle">Back</div>
-      <div className="person">
-        <div className="head"/>
-        <div className="torso">
-          <div className={cls('UpperBack') + ' upperBack'} title="Upper back"/>
-          <div className={cls('Lats') + ' lat left'} title="Lats"/>
-          <div className={cls('Lats') + ' lat right'} title="Lats"/>
-          <div className={cls('Erectors') + ' erectors'} title="Erectors"/>
-          <div className={cls('Glutes') + ' glutes'} title="Glutes"/>
-        </div>
-        <div className={cls('RearDelt') + ' delt rear left'} title="Rear delt"/>
-        <div className={cls('RearDelt') + ' delt rear right'} title="Rear delt"/>
-        <div className={cls('Triceps') + ' arm triceps left'} title="Triceps"/>
-        <div className={cls('Triceps') + ' arm triceps right'} title="Triceps"/>
-        <div className={cls('Hamstrings') + ' leg ham left'} title="Hamstrings"/>
-        <div className={cls('Hamstrings') + ' leg ham right'} title="Hamstrings"/>
-        <div className={cls('Calves') + ' calf left'} title="Calves"/>
-        <div className={cls('Calves') + ' calf right'} title="Calves"/>
-      </div>
+    <div className="hmLegendGrid">
+      {label('Chest','Chest')}
+      {label('Traps','Traps')}
+      {label('UpperBack','Upper back')}
+      {label('Lats','Lats')}
+      {label('Erectors','Erectors')}
+      {label('FrontDelt','Front delts')}
+      {label('SideDelt','Side delts')}
+      {label('RearDelt','Rear delts')}
+      {label('Abs','Abs')}
+      {label('Obliques','Obliques')}
+      {label('Quads','Quads')}
+      {label('Hamstrings','Hamstrings')}
+      {label('Adductors','Adductors')}
+      {label('Abductors','Abductors')}
+      {label('Glutes','Glutes')}
+      {label('Calves','Calves')}
+      {label('Biceps','Biceps')}
+      {label('Triceps','Triceps')}
+      {label('Forearms','Forearms')}
     </div>
   </div>
 }

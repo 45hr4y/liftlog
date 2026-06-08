@@ -146,3 +146,28 @@ Added:
 
 Note:
 - Planned workouts are calendar planning items. When you complete a workout normally, it appears as the solid coloured calendar block.
+
+
+## v14 Professional Heat Map
+
+Improved the heat map to be more professional and anatomically detailed.
+
+Added muscle regions:
+- Traps
+- Erectors
+- Upper back
+- Lats
+- Rear delts
+- Side delts
+- Front delts
+- Abs
+- Obliques
+- Quads
+- Hamstrings
+- Adductors
+- Abductors
+- Calves
+- Glutes
+- Biceps
+- Triceps
+- Forearms
