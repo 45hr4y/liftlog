@@ -132,3 +132,17 @@ Next planned features:
 - Body heat map
 - Exercise GIF/YouTube embeds
 - Exercise demo cards
+
+
+## v13 Update — Body Heat Map + Planned Calendar
+
+Added:
+- Weekly body heat map on the homepage.
+- Front and back body views.
+- Heat intensity based on weekly training volume.
+- Planned workouts on the calendar.
+- Planned workouts appear as muted/dotted blocks.
+- Drag or tap routines onto calendar days to plan workouts.
+
+Note:
+- Planned workouts are calendar planning items. When you complete a workout normally, it appears as the solid coloured calendar block.

@@ -16,6 +16,7 @@ type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Uni
 type Routine = { id?: number; name: string; color: string; archived?: boolean; createdAt: string };
 type RoutineExercise = { id?: number; routineId: number; exerciseId: number; subtypeId?: number; order: number; sets: number; reps: string; rest: number; createdAt: string };
 type Workout = { id?: number; routineId?: number; title: string; date: string; startedAt: string; endedAt?: string };
+type PlannedWorkout = { id?: number; routineId: number; date: string; note?: string; createdAt: string };
 type WorkoutSet = { id?: number; workoutId: number; exerciseId: number; subtypeId?: number; setNumber: number; weight: number; reps: number; unit: Unit; rir?: number; completed: boolean; settingValues?: Record<string, string | boolean>; createdAt: string };
 
 class LiftDB extends Dexie {
@@ -26,6 +27,7 @@ class LiftDB extends Dexie {
   routineExercises!: Table<RoutineExercise, number>;
   workouts!: Table<Workout, number>;
   sets!: Table<WorkoutSet, number>;
+  plannedWorkouts!: Table<PlannedWorkout, number>;
   backups!: Table<BackupSnapshot, number>;
   constructor() {
     super('liftlog_v12_ui_upgrade_db');
@@ -37,6 +39,7 @@ class LiftDB extends Dexie {
       routineExercises: '++id,routineId,exerciseId,subtypeId,order',
       workouts: '++id,routineId,date',
       sets: '++id,workoutId,exerciseId,subtypeId,createdAt',
+      plannedWorkouts: '++id,routineId,date',
       backups: '++id,createdAt,reason'
     });
   }
@@ -193,6 +196,7 @@ export default function App() {
   const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
+  const [plannedWorkouts, setPlannedWorkouts] = useState<PlannedWorkout[]>([]);
   const [activeWorkoutId, setActiveWorkoutId] = useState<number|undefined>();
   const [selectedExerciseId, setSelectedExerciseId] = useState<number|undefined>();
 
@@ -204,6 +208,7 @@ export default function App() {
     setRoutineExercises(await db.routineExercises.toArray());
     setWorkouts(await db.workouts.orderBy('date').reverse().toArray());
     setSets(await db.sets.toArray());
+    setPlannedWorkouts(await db.plannedWorkouts.toArray());
   }
   useEffect(()=>{ seed().then(refresh); },[]);
   useEffect(()=>{ document.body.dataset.theme = settings.theme; },[settings.theme]);
@@ -215,13 +220,13 @@ export default function App() {
       <button className="iconBtn" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'}); refresh();}}>{settings.theme==='light'?<Moon/>:<Sun/>}</button>
     </header>
     <main>
-      {page==='home' && <HomePage data={{exercises,subtypes,routines,workouts,sets,setPage}} />}
+      {page==='home' && <HomePage data={{exercises,subtypes,routines,workouts,sets,plannedWorkouts,setPage}} />}
       {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,refresh,setPage,setSelectedExerciseId}} />}
       {page==='exerciseDetail' && <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} />}
       {page==='subtypes' && <SubtypesPage data={{exercises,subtypes,refresh}} />}
       {page==='routines' && <RoutinesPage data={{exercises,subtypes,routines,routineExercises,refresh}} />}
       {page==='log' && <LogPage data={{settings,exercises,subtypes,routines,routineExercises,workouts,sets,activeWorkout,setActiveWorkoutId,refresh}} />}
-      {page==='calendar' && <CalendarPage data={{routines,workouts,sets}} />}
+      {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage}} />}
       {page==='progress' && <ProgressPage data={{settings,exercises,subtypes,workouts,sets}} />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
@@ -291,6 +296,100 @@ function recoveryLabel(volume: number) {
   return { label: 'High', cls: 'high' };
 }
 
+function heatIntensityClass(value: number, max: number) {
+  if (!value) return 'heat0';
+  const ratio = value / Math.max(max, 1);
+  if (ratio < .25) return 'heat1';
+  if (ratio < .55) return 'heat2';
+  if (ratio < .85) return 'heat3';
+  return 'heat4';
+}
+
+function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: WorkoutSet[]) {
+  const values: Record<string, number> = {
+    Chest:0, Abs:0, Obliques:0,
+    FrontDelt:0, SideDelt:0, RearDelt:0,
+    Biceps:0, Triceps:0,
+    Quads:0, Hamstrings:0, Calves:0, Glutes:0,
+    UpperBack:0, Lats:0, Erectors:0
+  };
+  const weekWorkouts = workoutsThisWeek(workouts);
+  const weekSets = sets.filter(s => weekWorkouts.some(w => w.id === s.workoutId));
+  weekSets.forEach(s => {
+    const ex = exercises.find(e => e.id === s.exerciseId);
+    if (!ex) return;
+    const v = volumeKg(s);
+    if (ex.muscle === 'Chest') values.Chest += v;
+    if (ex.muscle === 'Abs') values.Abs += v;
+    if (ex.muscle === 'Obliques') values.Obliques += v;
+    if (ex.muscle === 'Front Delt') values.FrontDelt += v;
+    if (ex.muscle === 'Side Delt') values.SideDelt += v;
+    if (ex.muscle === 'Rear Delt') values.RearDelt += v;
+    if (ex.muscle === 'Biceps') values.Biceps += v;
+    if (ex.muscle === 'Triceps') values.Triceps += v;
+    if (ex.muscle === 'Quadriceps') values.Quads += v;
+    if (ex.muscle === 'Hamstrings') values.Hamstrings += v;
+    if (ex.muscle === 'Calves') values.Calves += v;
+    if (ex.muscle === 'Glutes') values.Glutes += v;
+    if (ex.muscle === 'Upper Back') values.UpperBack += v;
+    if (ex.muscle === 'Lats') values.Lats += v;
+    if (ex.muscle === 'Erectors') values.Erectors += v;
+  });
+  return values;
+}
+
+function BodyHeatMap({values}:{values:Record<string, number>}) {
+  const max = Math.max(...Object.values(values), 1);
+  const cls = (key:string) => `bodyPart ${heatIntensityClass(values[key] || 0, max)}`;
+  return <div className="bodyHeatWrap">
+    <div className="bodyFigure">
+      <div className="bodyTitle">Front</div>
+      <div className="person">
+        <div className="head"/>
+        <div className="torso">
+          <div className={cls('Chest') + ' chest'} title="Chest"/>
+          <div className={cls('Abs') + ' abs'} title="Abs"/>
+          <div className={cls('Obliques') + ' oblique left'} title="Obliques"/>
+          <div className={cls('Obliques') + ' oblique right'} title="Obliques"/>
+        </div>
+        <div className={cls('FrontDelt') + ' delt front left'} title="Front delt"/>
+        <div className={cls('FrontDelt') + ' delt front right'} title="Front delt"/>
+        <div className={cls('SideDelt') + ' sideDelt left'} title="Side delt"/>
+        <div className={cls('SideDelt') + ' sideDelt right'} title="Side delt"/>
+        <div className={cls('Biceps') + ' arm biceps left'} title="Biceps"/>
+        <div className={cls('Biceps') + ' arm biceps right'} title="Biceps"/>
+        <div className={cls('Quads') + ' leg quad left'} title="Quadriceps"/>
+        <div className={cls('Quads') + ' leg quad right'} title="Quadriceps"/>
+        <div className={cls('Calves') + ' calf left'} title="Calves"/>
+        <div className={cls('Calves') + ' calf right'} title="Calves"/>
+      </div>
+    </div>
+
+    <div className="bodyFigure">
+      <div className="bodyTitle">Back</div>
+      <div className="person">
+        <div className="head"/>
+        <div className="torso">
+          <div className={cls('UpperBack') + ' upperBack'} title="Upper back"/>
+          <div className={cls('Lats') + ' lat left'} title="Lats"/>
+          <div className={cls('Lats') + ' lat right'} title="Lats"/>
+          <div className={cls('Erectors') + ' erectors'} title="Erectors"/>
+          <div className={cls('Glutes') + ' glutes'} title="Glutes"/>
+        </div>
+        <div className={cls('RearDelt') + ' delt rear left'} title="Rear delt"/>
+        <div className={cls('RearDelt') + ' delt rear right'} title="Rear delt"/>
+        <div className={cls('Triceps') + ' arm triceps left'} title="Triceps"/>
+        <div className={cls('Triceps') + ' arm triceps right'} title="Triceps"/>
+        <div className={cls('Hamstrings') + ' leg ham left'} title="Hamstrings"/>
+        <div className={cls('Hamstrings') + ' leg ham right'} title="Hamstrings"/>
+        <div className={cls('Calves') + ' calf left'} title="Calves"/>
+        <div className={cls('Calves') + ' calf right'} title="Calves"/>
+      </div>
+    </div>
+  </div>
+}
+
+
 function HomePage({data}:any){
   const {exercises,subtypes,routines,workouts,sets,setPage}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
@@ -359,6 +458,15 @@ function HomePage({data}:any){
           </div>
         })}
       </div>
+    </Card>
+
+    <Card cls="premiumCard">
+      <div className="sectionHeader">
+        <h3>Weekly Body Heat Map</h3>
+        <span className="muted miniLabel">Volume intensity</span>
+      </div>
+      <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} />
+      <div className="heatLegend"><span className="heat0"></span>None <span className="heat1"></span>Light <span className="heat2"></span>Moderate <span className="heat3"></span>High <span className="heat4"></span>Very high</div>
     </Card>
 
     <Card cls="premiumCard">
@@ -610,7 +718,75 @@ function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUn
   return <Card><div className="machine smallMachine">{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<div className="placeholder">No photo</div>}<div><h3>{ex.name}</h3><p className="muted">{subtype?.name||'No subtype selected'}</p><Pills><span>{item.sets} sets</span><span>{item.reps}</span><span>Machine default: {subtype?.defaultUnit||defaultUnit}</span></Pills></div></div><div className="grid2"><label>Subtype<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No subtype</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></label></div>{subtype?.settings?.length>0&&<details open><summary>Machine settings</summary>{subtype.settings.map((s:MachineSetting)=><div className="setting" key={s.id}><label>{s.label}</label>{s.type==='dropdown'&&<select value={String(values[s.id]??'')} onChange={e=>setValues({...values,[s.id]:e.target.value})}>{s.options?.map(o=><option key={o}>{o}</option>)}</select>}{s.type==='checkbox'&&<input type="checkbox" checked={Boolean(values[s.id])} onChange={e=>setValues({...values,[s.id]:e.target.checked})}/>} {s.type==='text'&&<input value={String(values[s.id]??'')} onChange={e=>setValues({...values,[s.id]:e.target.value})}/>}</div>)}</details>}<details open><summary>Previous selected subtype</summary>{prev.length?prev.map((s:WorkoutSet)=><div className="prev" key={s.id}>Set {s.setNumber}: <b>{Math.round(convert(s.weight,s.unit,unit)*10)/10}{unit}</b> × {s.reps}</div>):<p className="muted">No previous sets.</p>}</details>{todaySets.length>0&&<details open><summary>Saved today</summary>{todaySets.map((s:WorkoutSet)=><div className="done editableSet" key={s.id}>{editingSetId===s.id ? <><span>Set {s.setNumber}</span><input value={editWeight} onChange={e=>setEditWeight(e.target.value)} type="number" step=".5"/><input value={editReps} onChange={e=>setEditReps(e.target.value)} type="number"/><input value={editRir} onChange={e=>setEditRir(e.target.value)} type="number" step=".5"/><button className="smallAction" onClick={()=>saveSetEdit(s)}>Save</button><button className="smallAction" onClick={()=>setEditingSetId(undefined)}>Cancel</button></> : <><Check/> <span>Set {s.setNumber}: {s.weight}{s.unit} × {s.reps}</span><button className="smallAction" onClick={()=>beginSetEdit(s)}>Edit</button><button className="trash tinyTrash" onClick={()=>deleteSet(s)}><Trash2/></button></>}</div>)}</details>}<label className="inline">Extra sets <input type="number" value={extra} onChange={e=>setExtra(Number(e.target.value))}/></label>{Array.from({length:item.sets+extra}).map((_,i)=>{const n=i+1; const p=prev.find((x:WorkoutSet)=>x.setNumber===n); const pw=p?Math.round(convert(p.weight,p.unit,unit)*10)/10:undefined; return <div className="setrow" key={n}><span><input type="checkbox" checked={todaySets.some((s:WorkoutSet)=>s.setNumber===n)} readOnly/> Set {n}</span><input id={`w-${item.id}-${n}`} placeholder={pw?`Prev ${pw}`:'Weight'} type="number" step=".5"/><input id={`r-${item.id}-${n}`} placeholder={p?`Prev ${p.reps}`:'Reps'} type="number"/><input id={`rir-${item.id}-${n}`} placeholder="RIR" type="number" step=".5"/><button className="secondary compactBtn" type="button" onClick={()=>autofill(n)}>Fill</button><button onClick={()=>save(n)}>Save</button></div>})}</Card>
 }
 
-function CalendarPage({data}:any){const {routines,workouts,sets}=data; const days=Array.from({length:35}).map((_,i)=>{const d=new Date();d.setDate(d.getDate()-17+i);return d.toISOString().slice(0,10)}); return <section><div className="calendar">{days.map(day=>{const ws=workouts.filter((w:Workout)=>w.date===day);return <Card key={day} cls={day===today()?'day today':'day'}><strong>{new Date(day).toLocaleDateString([], {day:'numeric',month:'short'})}</strong>{ws.map((w:Workout)=>{const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="event" style={{background:r?.color||'#0f172a'}} key={w.id}>{r?.name||w.title}<br/><span>{ss.length} sets · {fmtVol(vol)}</span></div>})}</Card>})}</div></section>}
+function CalendarPage({data}:any){
+  const {routines,workouts,sets,plannedWorkouts,refresh,setPage}=data;
+  const [dragRoutineId,setDragRoutineId]=useState<number|undefined>();
+  const days=Array.from({length:35}).map((_,i)=>{const d=new Date();d.setDate(d.getDate()-17+i);return d.toISOString().slice(0,10)});
+
+  async function planRoutine(routineId:number|undefined, date:string){
+    if(!routineId) return;
+    await db.plannedWorkouts.add({routineId, date, createdAt:now()});
+    refresh();
+  }
+
+  async function removePlan(id:number|undefined){
+    if(!id) return;
+    await db.plannedWorkouts.delete(id);
+    refresh();
+  }
+
+  async function startPlanned(plan:PlannedWorkout){
+    setPage('log');
+  }
+
+  return <section>
+    <Card cls="premiumCard">
+      <div className="sectionHeader">
+        <h3>Plan workouts</h3>
+        <span className="muted miniLabel">Drag routine → day</span>
+      </div>
+      <div className="routineDragTray">
+        {routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><div
+          key={r.id}
+          className="routineChip"
+          draggable
+          style={{borderColor:r.color}}
+          onDragStart={()=>setDragRoutineId(r.id)}
+          onClick={()=>setDragRoutineId(r.id)}
+        >
+          <span style={{background:r.color}}></span>{r.name}
+        </div>)}
+      </div>
+      {dragRoutineId && <p className="muted">Selected: {routines.find((r:Routine)=>r.id===dragRoutineId)?.name}. Tap or drop onto a calendar day.</p>}
+    </Card>
+
+    <div className="calendar">{days.map(day=>{
+      const ws=workouts.filter((w:Workout)=>w.date===day);
+      const plans=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day);
+      return <Card
+        key={day}
+        cls={day===today()?'day today':'day'}
+      >
+        <div
+          className="dayDropZone"
+          onDragOver={e=>e.preventDefault()}
+          onDrop={async e=>{e.preventDefault(); await planRoutine(dragRoutineId, day); setDragRoutineId(undefined);}}
+          onClick={async()=>{ if(dragRoutineId){ await planRoutine(dragRoutineId, day); setDragRoutineId(undefined);} }}
+        >
+          <strong>{new Date(day).toLocaleDateString([], {day:'numeric',month:'short'})}</strong>
+          {plans.map((p:PlannedWorkout)=>{const r=routines.find((x:Routine)=>x.id===p.routineId); return <div className="plannedEvent" style={{borderColor:r?.color||'#0f172a', color:r?.color||'#0f172a'}} key={p.id}>
+            <span>Planned</span>{r?.name||'Routine'}
+            <div className="plannedActions">
+              <button onClick={(e)=>{e.stopPropagation(); startPlanned(p)}}>Start</button>
+              <button onClick={(e)=>{e.stopPropagation(); removePlan(p.id)}}>×</button>
+            </div>
+          </div>})}
+          {ws.map((w:Workout)=>{const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="event" style={{background:r?.color||'#0f172a'}} key={w.id}>{r?.name||w.title}<br/><span>{ss.length} sets · {fmtVol(vol)}</span></div>})}
+        </div>
+      </Card>
+    })}</div>
+  </section>
+}
 function StatsPage({data}:any){
   const {settings,exercises,workouts,sets}=data;
   const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);

@@ -555,3 +555,171 @@ body[data-theme="dark"] .prFeedItem{
   .recoveryGrid{grid-template-columns:1fr}
   .heroBadge{width:48px;height:48px}
 }
+
+
+/* LiftLog v13 Body Heat Map + Calendar Planner */
+.bodyHeatWrap{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  align-items:start;
+}
+.bodyFigure{
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:20px;
+  padding:12px;
+}
+body[data-theme="dark"] .bodyFigure{
+  background:#020617;
+  border-color:#1e293b;
+}
+.bodyTitle{
+  text-align:center;
+  font-size:12px;
+  font-weight:950;
+  color:#64748b;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:6px;
+}
+.person{
+  position:relative;
+  height:285px;
+  width:130px;
+  margin:0 auto;
+}
+.head{
+  position:absolute;
+  top:0;
+  left:50%;
+  transform:translateX(-50%);
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  background:#cbd5e1;
+}
+.torso{
+  position:absolute;
+  top:45px;
+  left:50%;
+  transform:translateX(-50%);
+  width:78px;
+  height:118px;
+}
+.bodyPart{
+  position:absolute;
+  background:#e2e8f0;
+  border:1px solid rgba(255,255,255,.65);
+  box-shadow:inset 0 0 0 1px rgba(15,23,42,.05);
+}
+.heat0{background:#e2e8f0!important}
+.heat1{background:#fde68a!important}
+.heat2{background:#fb923c!important}
+.heat3{background:#ef4444!important}
+.heat4{background:#7f1d1d!important}
+.chest{left:14px;top:5px;width:50px;height:35px;border-radius:16px 16px 10px 10px}
+.abs{left:22px;top:42px;width:34px;height:48px;border-radius:12px}
+.oblique{top:42px;width:16px;height:52px;border-radius:10px}
+.oblique.left{left:4px}.oblique.right{right:4px}
+.upperBack{left:12px;top:4px;width:54px;height:36px;border-radius:16px 16px 10px 10px}
+.lat{top:38px;width:24px;height:58px;border-radius:12px}
+.lat.left{left:4px}.lat.right{right:4px}
+.erectors{left:30px;top:42px;width:18px;height:60px;border-radius:10px}
+.glutes{left:17px;top:96px;width:44px;height:30px;border-radius:12px 12px 18px 18px}
+.delt{top:52px;width:28px;height:28px;border-radius:999px}
+.delt.left{left:10px}.delt.right{right:10px}
+.sideDelt{top:72px;width:25px;height:38px;border-radius:999px}
+.sideDelt.left{left:2px}.sideDelt.right{right:2px}
+.arm{top:95px;width:24px;height:74px;border-radius:999px}
+.arm.left{left:5px}.arm.right{right:5px}
+.leg{top:166px;width:34px;height:74px;border-radius:14px}
+.leg.left{left:31px}.leg.right{right:31px}
+.calf{top:238px;width:28px;height:46px;border-radius:999px}
+.calf.left{left:35px}.calf.right{right:35px}
+.heatLegend{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  color:#64748b;
+  font-size:12px;
+  margin-top:12px;
+}
+.heatLegend span{
+  display:inline-block;
+  width:14px;
+  height:14px;
+  border-radius:5px;
+  border:1px solid #cbd5e1;
+}
+.miniLabel{
+  font-size:12px;
+  font-weight:800;
+}
+.routineDragTray{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.routineChip{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  border:2px solid #0f172a;
+  border-radius:999px;
+  padding:8px 12px;
+  font-weight:900;
+  background:#fff;
+  cursor:grab;
+}
+body[data-theme="dark"] .routineChip{
+  background:#020617;
+}
+.routineChip span{
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  display:inline-block;
+}
+.dayDropZone{
+  min-height:100px;
+}
+.plannedEvent{
+  margin-top:8px;
+  border:2px dashed currentColor;
+  background:rgba(148,163,184,.12);
+  border-radius:12px;
+  padding:7px;
+  font-size:11px;
+  font-weight:900;
+  line-height:1.25;
+}
+.plannedEvent span{
+  display:block;
+  opacity:.65;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.plannedActions{
+  display:flex;
+  gap:5px;
+  margin-top:6px;
+}
+.plannedActions button{
+  border-radius:8px;
+  padding:4px 6px;
+  font-size:10px;
+  font-weight:900;
+  background:#fff;
+  color:#0f172a;
+}
+body[data-theme="dark"] .plannedActions button{
+  background:#0f172a;
+  color:#f8fafc;
+}
+@media(max-width:720px){
+  .bodyHeatWrap{grid-template-columns:1fr}
+  .person{height:260px}
+}
