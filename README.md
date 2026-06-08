@@ -171,3 +171,13 @@ Added muscle regions:
 - Biceps
 - Triceps
 - Forearms
+
+
+## v15 Update
+- Monday-Sunday week calendar with previous/next controls.
+- Planned dotted workout blocks and completed solid blocks.
+- Start empty workout and add exercises during workout.
+- Option to save custom workout as a routine.
+- Hevy-style set logger with blue completed sets.
+- Previous set weight/reps under each entry.
+- Floating rest timer and active workout resume safeguards.

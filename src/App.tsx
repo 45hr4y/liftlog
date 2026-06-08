@@ -197,7 +197,8 @@ export default function App() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [plannedWorkouts, setPlannedWorkouts] = useState<PlannedWorkout[]>([]);
-  const [activeWorkoutId, setActiveWorkoutId] = useState<number|undefined>();
+  const [activeWorkoutId, setActiveWorkoutIdState] = useState<number|undefined>();
+  function setActiveWorkoutId(id:number|undefined){ setActiveWorkoutIdState(id); if(id) localStorage.setItem('liftlog-active-workout-id', String(id)); else localStorage.removeItem('liftlog-active-workout-id'); }
   const [selectedExerciseId, setSelectedExerciseId] = useState<number|undefined>();
 
   async function refresh() {
@@ -210,7 +211,7 @@ export default function App() {
     setSets(await db.sets.toArray());
     setPlannedWorkouts(await db.plannedWorkouts.toArray());
   }
-  useEffect(()=>{ seed().then(refresh); },[]);
+  useEffect(()=>{ seed().then(async()=>{ await refresh(); const saved=localStorage.getItem('liftlog-active-workout-id'); if(saved){ const w=await db.workouts.get(Number(saved)); if(w && !w.endedAt) setActiveWorkoutId(Number(saved)); } }); },[]);
   useEffect(()=>{ document.body.dataset.theme = settings.theme; },[settings.theme]);
   const activeWorkout = workouts.find(w=>w.id===activeWorkoutId);
 
@@ -645,108 +646,71 @@ function RoutinesPage({data}:any){
         </div></div><p className="muted">{st?.name||'No subtype selected'}</p><Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}</section>
 }
 
+
+function mondayOfWeek(d: Date) {
+  const out = new Date(d);
+  const day = out.getDay();
+  const diff = out.getDate() - day + (day === 0 ? -6 : 1);
+  out.setDate(diff);
+  out.setHours(0,0,0,0);
+  return out;
+}
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate()+days);
+  return d;
+}
+function dateKey(date: Date) {
+  return date.toISOString().slice(0,10);
+}
+
 function LogPage({data}:any){
   const {settings,exercises,subtypes,routines,routineExercises,workouts,sets,activeWorkout,setActiveWorkoutId,refresh}=data;
   const [routineId,setRoutineId]=useState<number|undefined>(); 
   const [timer,setTimer]=useState<number|undefined>(); 
   const [rest,setRest]=useState(90); 
   const [,setTick]=useState(0);
-  const [lastFinishedId,setLastFinishedId]=useState<number|undefined>();
+  const [customMode,setCustomMode]=useState(false);
+  const [customItems,setCustomItems]=useState<RoutineExercise[]>([]);
+  const [addExerciseId,setAddExerciseId]=useState<number|undefined>();
+  const [addSubtypeId,setAddSubtypeId]=useState<number|undefined>();
 
   useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),1000);return()=>clearInterval(i)},[]);
+  useEffect(()=>{ let lock:any; async function requestLock(){ try{ if('wakeLock' in navigator && activeWorkout){ lock = await (navigator as any).wakeLock.request('screen'); } }catch{} } requestLock(); return ()=>{ try{lock?.release?.()}catch{} }; },[activeWorkout?.id]);
 
-  async function start(){ 
-    if(!routineId)return alert('Choose routine'); 
-    const r=routines.find((x:Routine)=>x.id===routineId); 
-    const id=await db.workouts.add({routineId,title:r?.name||'Workout',date:today(),startedAt:now()}); 
-    setLastFinishedId(undefined);
-    setActiveWorkoutId(id); 
-    refresh(); 
-  }
-
+  async function start(){ if(!routineId)return alert('Choose routine'); const r=routines.find((x:Routine)=>x.id===routineId); const id=await db.workouts.add({routineId,title:r?.name||'Workout',date:today(),startedAt:now()}); setActiveWorkoutId(id); refresh(); }
+  async function startEmpty(){ const id=await db.workouts.add({title:'Custom Workout',date:today(),startedAt:now()}); setCustomMode(true); setActiveWorkoutId(id); refresh(); }
   async function finish(){ 
     if(!activeWorkout?.id)return; 
     await db.workouts.update(activeWorkout.id,{endedAt:now()}); 
-    setLastFinishedId(activeWorkout.id);
-    setActiveWorkoutId(undefined); 
-    refresh(); 
+    if(customMode && customItems.length && confirm('Save this custom workout as a new routine?')){
+      const name = prompt('Routine name?', 'Custom Routine') || 'Custom Routine';
+      const rid = await db.routines.add({name, color:'#2563eb', archived:false, createdAt:now()});
+      for (const item of customItems) await db.routineExercises.add({...item, id:undefined, routineId:rid, createdAt:now()});
+    }
+    setActiveWorkoutId(undefined); setCustomItems([]); setCustomMode(false); refresh(); 
   }
-
-  const lastFinished = workouts.find((w:Workout)=>w.id===lastFinishedId) || (!activeWorkout ? workouts.find((w:Workout)=>w.endedAt) : undefined);
-
+  function addCustomExercise(){
+    if(!addExerciseId) return alert('Choose exercise');
+    const item:RoutineExercise = {id:Date.now(), routineId:0, exerciseId:addExerciseId, subtypeId:addSubtypeId, order:customItems.length+1, sets:3, reps:'8-12', rest:90, createdAt:now()};
+    setCustomItems([...customItems,item]);
+    setAddExerciseId(undefined); setAddSubtypeId(undefined);
+  }
   if(!activeWorkout) return <section>
-    {lastFinished && <WorkoutSummaryCard workout={lastFinished} exercises={exercises} sets={sets}/>}
-    <Card>
-      <h3>Start Workout</h3>
-      <select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}>
-        <option value="">Choose routine</option>
-        {routines.map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}
-      </select>
-      <button className="primary" onClick={start}>Start</button>
-    </Card>
+    <Card><h3>Start Workout</h3><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select><button className="primary" onClick={start}>Start Routine</button><button className="secondary" onClick={startEmpty}>Start Empty Workout</button></Card>
+    <Card><h3>Timeout protection</h3><p className="muted">Sets save immediately. If the page refreshes, LiftLog will try to resume your unfinished workout. During workouts, screen wake lock is requested where your browser supports it.</p></Card>
   </section>;
-
-  const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
+  const routineItems=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=customMode || !activeWorkout.routineId ? customItems : routineItems;
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
-  const liveSummary = workoutSummary(activeWorkout, exercises, sets);
 
-  return <section>
-    <Card>
-      <div className="row">
-        <div>
-          <h3>{activeWorkout.title}</h3>
-          <p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · {workoutDurationMinutes(activeWorkout)} min</p>
-        </div>
-        <button className="danger mini" onClick={finish}>Finish</button>
-      </div>
-      {liveSummary && <div className="liveSummary">
-        <span>{liveSummary.totalSets} sets</span>
-        <span>{fmtVol(liveSummary.totalVolume)}</span>
-        <span>{liveSummary.uniqueExercises} exercises</span>
-      </div>}
-    </Card>
-
-    <Card>
-      <div className="timer">
-        <strong>Rest {left}s</strong>
-        <input type="number" value={rest} onChange={e=>setRest(Number(e.target.value))}/>
-        <button className="secondary" onClick={()=>setTimer(Date.now())}>Start</button>
-      </div>
-    </Card>
-
-    {items.map((it:RoutineExercise)=>{
-      const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); 
-      return <Logger key={it.id} item={it} ex={ex} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===ex?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} onSave={()=>setTimer(Date.now())}/>
-    })}
+  return <section className="workoutV15">
+    <Card cls="workoutHeaderSticky"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div></Card>
+    <div className="floatingTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Rest</button></div>
+    <Card cls="addExercisePanel"><h3>Add exercise during workout</h3><select value={addExerciseId??''} onChange={e=>{setAddExerciseId(Number(e.target.value));setAddSubtypeId(undefined)}}><option value="">Choose exercise</option>{exercises.map((e:Exercise)=><option key={e.id} value={e.id}>{e.name}</option>)}</select><select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional subtype</option>{subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="secondary" onClick={addCustomExercise}>+ Add Exercise</button></Card>
+    {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; return <Logger key={it.id} item={it} ex={ex} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===ex?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} onSave={()=>setTimer(Date.now())}/> })}
   </section>
 }
-
-function WorkoutSummaryCard({workout, exercises, sets}:{workout:Workout; exercises:Exercise[]; sets:WorkoutSet[]}) {
-  const summary = workoutSummary(workout, exercises, sets);
-  if (!summary) return null;
-  const bestSetExercise = exercises.find(e=>e.id===summary.bestSet?.exerciseId);
-  const bestE1RMExercise = exercises.find(e=>e.id===summary.bestE1RMSet?.exerciseId);
-
-  return <Card cls="summaryCard">
-    <h3>Workout Summary</h3>
-    <p className="muted">{workout.title} · {workout.date} · {workoutDurationMinutes(workout)} min</p>
-    <div className="summaryGrid">
-      <div><strong>{summary.totalSets}</strong><span>Sets</span></div>
-      <div><strong>{summary.uniqueExercises}</strong><span>Exercises</span></div>
-      <div><strong>{fmtVol(summary.totalVolume)}</strong><span>Volume</span></div>
-      <div><strong>{summary.topMuscle ? summary.topMuscle[0] : '-'}</strong><span>Top group</span></div>
-    </div>
-    <div className="prBox">
-      <h4>Best set volume</h4>
-      {summary.bestSet ? <p>{bestSetExercise?.name || 'Exercise'} · {summary.bestSet.weight}{summary.bestSet.unit} × {summary.bestSet.reps} = {fmtVol(volumeKg(summary.bestSet))}</p> : <p className="muted">No sets logged.</p>}
-    </div>
-    <div className="prBox">
-      <h4>Best estimated 1RM</h4>
-      {summary.bestE1RMSet ? <p>{bestE1RMExercise?.name || 'Exercise'} · {e1rm(kgValue(summary.bestE1RMSet), summary.bestE1RMSet.reps)}kg estimated</p> : <p className="muted">No sets logged.</p>}
-    </div>
-  </Card>
-}
-
 function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Workout, workouts:Workout[], sets:WorkoutSet[]){
   const past=workouts.filter(w=>w.id!==workout.id&&w.date<workout.date).sort((a: Workout, b: Workout)=>b.date.localeCompare(a.date));
   for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a: WorkoutSet, b: WorkoutSet)=>a.setNumber-b.setNumber); if(found.length)return found}
@@ -755,84 +719,85 @@ function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Wor
 function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave}:any){
   const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
   const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({});
-  const [editingSetId,setEditingSetId]=useState<number|undefined>(); const [editWeight,setEditWeight]=useState(''); const [editReps,setEditReps]=useState(''); const [editRir,setEditRir]=useState('');
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
-  const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets); const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
-  async function save(n:number){const w=(document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement).value; const r=(document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement).value; const rir=(document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement).value; if(!r)return alert('Enter reps'); await db.sets.add({workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:now()}); (document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement).value=''; (document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement).value=''; (document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement).value=''; onSave(); refresh();}
-  function autofill(n:number){ const p=previousSetForNumber(ex.id, subtype?.id, n, workout, workouts, sets); if(!p)return; const w=document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement; const r=document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement; w.value=String(Math.round(convert(p.weight,p.unit,unit)*10)/10); r.value=String(p.reps); }
-  function beginSetEdit(s:WorkoutSet){ setEditingSetId(s.id); setEditWeight(String(s.weight)); setEditReps(String(s.reps)); setEditRir(s.rir!==undefined?String(s.rir):''); }
-  async function saveSetEdit(s:WorkoutSet){ await db.sets.update(s.id!,{weight:Number(editWeight||0),reps:Number(editReps||0),rir:editRir?Number(editRir):undefined}); setEditingSetId(undefined); refresh(); }
-  async function deleteSet(s:WorkoutSet){ if(!confirm('Delete this logged set?')) return; await db.sets.delete(s.id!); refresh(); }
-  return <Card><div className="machine smallMachine">{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<div className="placeholder">No photo</div>}<div><h3>{ex.name}</h3><p className="muted">{subtype?.name||'No subtype selected'}</p><Pills><span>{item.sets} sets</span><span>{item.reps}</span><span>Machine default: {subtype?.defaultUnit||defaultUnit}</span></Pills></div></div><div className="grid2"><label>Subtype<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No subtype</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></label></div>{subtype?.settings?.length>0&&<details open><summary>Machine settings</summary>{subtype.settings.map((s:MachineSetting)=><div className="setting" key={s.id}><label>{s.label}</label>{s.type==='dropdown'&&<select value={String(values[s.id]??'')} onChange={e=>setValues({...values,[s.id]:e.target.value})}>{s.options?.map(o=><option key={o}>{o}</option>)}</select>}{s.type==='checkbox'&&<input type="checkbox" checked={Boolean(values[s.id])} onChange={e=>setValues({...values,[s.id]:e.target.checked})}/>} {s.type==='text'&&<input value={String(values[s.id]??'')} onChange={e=>setValues({...values,[s.id]:e.target.value})}/>}</div>)}</details>}<details open><summary>Previous selected subtype</summary>{prev.length?prev.map((s:WorkoutSet)=><div className="prev" key={s.id}>Set {s.setNumber}: <b>{Math.round(convert(s.weight,s.unit,unit)*10)/10}{unit}</b> × {s.reps}</div>):<p className="muted">No previous sets.</p>}</details>{todaySets.length>0&&<details open><summary>Saved today</summary>{todaySets.map((s:WorkoutSet)=><div className="done editableSet" key={s.id}>{editingSetId===s.id ? <><span>Set {s.setNumber}</span><input value={editWeight} onChange={e=>setEditWeight(e.target.value)} type="number" step=".5"/><input value={editReps} onChange={e=>setEditReps(e.target.value)} type="number"/><input value={editRir} onChange={e=>setEditRir(e.target.value)} type="number" step=".5"/><button className="smallAction" onClick={()=>saveSetEdit(s)}>Save</button><button className="smallAction" onClick={()=>setEditingSetId(undefined)}>Cancel</button></> : <><Check/> <span>Set {s.setNumber}: {s.weight}{s.unit} × {s.reps}</span><button className="smallAction" onClick={()=>beginSetEdit(s)}>Edit</button><button className="trash tinyTrash" onClick={()=>deleteSet(s)}><Trash2/></button></>}</div>)}</details>}<label className="inline">Extra sets <input type="number" value={extra} onChange={e=>setExtra(Number(e.target.value))}/></label>{Array.from({length:item.sets+extra}).map((_,i)=>{const n=i+1; const p=prev.find((x:WorkoutSet)=>x.setNumber===n); const pw=p?Math.round(convert(p.weight,p.unit,unit)*10)/10:undefined; return <div className="setrow" key={n}><span><input type="checkbox" checked={todaySets.some((s:WorkoutSet)=>s.setNumber===n)} readOnly/> Set {n}</span><input id={`w-${item.id}-${n}`} placeholder={pw?`Prev ${pw}`:'Weight'} type="number" step=".5"/><input id={`r-${item.id}-${n}`} placeholder={p?`Prev ${p.reps}`:'Reps'} type="number"/><input id={`rir-${item.id}-${n}`} placeholder="RIR" type="number" step=".5"/><button className="secondary compactBtn" type="button" onClick={()=>autofill(n)}>Fill</button><button onClick={()=>save(n)}>Save</button></div>})}</Card>
+  const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
+  const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
+
+  async function save(n:number){
+    const w=(document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement).value; 
+    const r=(document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement).value; 
+    const rir=(document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement).value; 
+    if(!r)return alert('Enter reps'); 
+    await db.sets.add({workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:now()}); 
+    onSave(); refresh();
+  }
+  return <Card cls="loggerV15">
+    <details open>
+      <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{subtype?.name||'No subtype selected'}</p></div></div></summary>
+      <div className="grid2"><label>Subtype<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No subtype</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></label></div>
+      <div className="setTableV15">
+        <div className="setHeaderV15"><span>Set</span><span>Previous</span><span>Weight</span><span>Reps</span><span>RIR</span><span></span></div>
+        {Array.from({length:item.sets+extra}).map((_,i)=>{
+          const n=i+1; const p=prev.find((x:WorkoutSet)=>x.setNumber===n); const saved=todaySets.find((s:WorkoutSet)=>s.setNumber===n);
+          const pw=p?Math.round(convert(p.weight,p.unit,unit)*10)/10:undefined;
+          return <div className={saved?'setLineV15 completedSet':'setLineV15'} key={n}>
+            <strong>{n}</strong><small>{p?`${pw}${unit} × ${p.reps}`:'—'}</small>
+            <input id={`w-${item.id}-${n}`} defaultValue={saved?String(saved.weight):(pw?String(pw):'')} placeholder="kg" type="number" step=".5"/>
+            <input id={`r-${item.id}-${n}`} defaultValue={saved?String(saved.reps):(p?String(p.reps):'')} placeholder="reps" type="number"/>
+            <input id={`rir-${item.id}-${n}`} defaultValue={saved?.rir!==undefined?String(saved.rir):''} placeholder="RIR" type="number" step=".5"/>
+            <button onClick={()=>save(n)}>{saved?'✓':'Save'}</button>
+          </div>
+        })}
+      </div>
+      <button className="secondary mini" onClick={()=>setExtra(extra+1)}>+ Add Set</button>
+    </details>
+  </Card>
 }
-
 function CalendarPage({data}:any){
-  const {routines,workouts,sets,plannedWorkouts,refresh,setPage}=data;
-  const [dragRoutineId,setDragRoutineId]=useState<number|undefined>();
-  const days=Array.from({length:35}).map((_,i)=>{const d=new Date();d.setDate(d.getDate()-17+i);return d.toISOString().slice(0,10)});
+  const {routines,workouts,sets,plannedWorkouts,refresh}=data;
+  const [weekStart,setWeekStart]=useState<Date>(mondayOfWeek(new Date()));
+  const [selectedRoutine,setSelectedRoutine]=useState<number|undefined>(routines.find((r:Routine)=>!r.archived)?.id);
+  const days=Array.from({length:7}).map((_,i)=>addDays(weekStart,i));
+  const weekLabel = `${days[0].toLocaleDateString([], {day:'numeric',month:'short'})} - ${days[6].toLocaleDateString([], {day:'numeric',month:'short'})}`;
 
-  async function planRoutine(routineId:number|undefined, date:string){
-    if(!routineId) return;
-    await db.plannedWorkouts.add({routineId, date, createdAt:now()});
+  async function planRoutine(date:string){
+    if(!selectedRoutine) return alert('Choose a routine first');
+    await db.plannedWorkouts.add({routineId:selectedRoutine, date, createdAt:now()});
     refresh();
   }
-
   async function removePlan(id:number|undefined){
     if(!id) return;
     await db.plannedWorkouts.delete(id);
     refresh();
   }
 
-  async function startPlanned(plan:PlannedWorkout){
-    setPage('log');
-  }
-
   return <section>
-    <Card cls="premiumCard">
-      <div className="sectionHeader">
-        <h3>Plan workouts</h3>
-        <span className="muted miniLabel">Drag routine → day</span>
+    <Card cls="premiumCard calendarToolbar">
+      <div className="calendarTop">
+        <button className="smallAction" onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Previous</button>
+        <div><h3>{weekLabel}</h3><p className="muted">Monday to Sunday</p></div>
+        <button className="smallAction" onClick={()=>setWeekStart(addDays(weekStart,7))}>Next →</button>
       </div>
-      <div className="routineDragTray">
-        {routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><div
-          key={r.id}
-          className="routineChip"
-          draggable
-          style={{borderColor:r.color}}
-          onDragStart={()=>setDragRoutineId(r.id)}
-          onClick={()=>setDragRoutineId(r.id)}
-        >
-          <span style={{background:r.color}}></span>{r.name}
-        </div>)}
-      </div>
-      {dragRoutineId && <p className="muted">Selected: {routines.find((r:Routine)=>r.id===dragRoutineId)?.name}. Tap or drop onto a calendar day.</p>}
+      <button className="secondary mini" onClick={()=>setWeekStart(mondayOfWeek(new Date()))}>This Week</button>
+      <label>Routine to plan
+        <select value={selectedRoutine??''} onChange={e=>setSelectedRoutine(Number(e.target.value))}>
+          {routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+      </label>
     </Card>
-
-    <div className="calendar">{days.map(day=>{
-      const ws=workouts.filter((w:Workout)=>w.date===day);
-      const plans=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day);
-      return <Card
-        key={day}
-        cls={day===today()?'day today':'day'}
-      >
-        <div
-          className="dayDropZone"
-          onDragOver={e=>e.preventDefault()}
-          onDrop={async e=>{e.preventDefault(); await planRoutine(dragRoutineId, day); setDragRoutineId(undefined);}}
-          onClick={async()=>{ if(dragRoutineId){ await planRoutine(dragRoutineId, day); setDragRoutineId(undefined);} }}
-        >
-          <strong>{new Date(day).toLocaleDateString([], {day:'numeric',month:'short'})}</strong>
-          {plans.map((p:PlannedWorkout)=>{const r=routines.find((x:Routine)=>x.id===p.routineId); return <div className="plannedEvent" style={{borderColor:r?.color||'#0f172a', color:r?.color||'#0f172a'}} key={p.id}>
-            <span>Planned</span>{r?.name||'Routine'}
-            <div className="plannedActions">
-              <button onClick={(e)=>{e.stopPropagation(); startPlanned(p)}}>Start</button>
-              <button onClick={(e)=>{e.stopPropagation(); removePlan(p.id)}}>×</button>
-            </div>
-          </div>})}
-          {ws.map((w:Workout)=>{const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="event" style={{background:r?.color||'#0f172a'}} key={w.id}>{r?.name||w.title}<br/><span>{ss.length} sets · {fmtVol(vol)}</span></div>})}
-        </div>
-      </Card>
-    })}</div>
+    <div className="weekCalendar">
+      {days.map(dayObj=>{
+        const day=dateKey(dayObj);
+        const ws=workouts.filter((w:Workout)=>w.date===day);
+        const plans=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day);
+        return <Card key={day} cls={day===today()?'weekDay todayWeek':'weekDay'}>
+          <div className="weekDayHead"><span>{dayObj.toLocaleDateString([], {weekday:'short'})}</span><strong>{dayObj.getDate()}</strong></div>
+          <button className="addPlanBtn" onClick={()=>planRoutine(day)}>+ Plan</button>
+          {plans.map((p:PlannedWorkout)=>{ const r=routines.find((x:Routine)=>x.id===p.routineId); return <div className="plannedEventV15" style={{borderColor:r?.color||'#0f172a', color:r?.color||'#0f172a'}} key={p.id}><em>Planned</em><strong>{r?.name||'Routine'}</strong><button onClick={()=>removePlan(p.id)}>Remove</button></div> })}
+          {ws.map((w:Workout)=>{ const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="completedEventV15" style={{background:r?.color||'#0f172a'}} key={w.id}><em>Completed</em><strong>{r?.name||w.title}</strong><span>{ss.length} sets · {fmtVol(vol)}</span></div> })}
+        </Card>
+      })}
+    </div>
   </section>
 }
 function StatsPage({data}:any){

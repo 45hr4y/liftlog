@@ -1,19 +1,5 @@
 
-added 69 packages, and audited 70 packages in 2s
-
-7 packages are looking for funding
-  run `npm fund` for details
-
-3 moderate severity vulnerabilities
-
-Some issues need review, and may require choosing
-a different dependency.
-
-Run `npm audit` for details.
-
----BUILD---
-
-> liftlog-v14-professional-heatmap@14.0.0 build
+> liftlog-v15-workout-calendar-upgrade@15.0.0 build
 > tsc && vite build
 
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
@@ -23,6 +9,6 @@ rendering chunks...
 computing gzip size...
 [2mdist/[22m[2massets/[22m[32mmanifest-DyUkWq-m.webmanifest  [39m[1m[2m  0.41 kB[22m[1m[22m
 [2mdist/[22m[32mindex.html                            [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:  0.31 kB[22m
-[2mdist/[22m[2massets/[22m[35mindex-BrF3oo_3.css             [39m[1m[2m 20.71 kB[22m[1m[22m[2m │ gzip:  4.77 kB[22m
-[2mdist/[22m[2massets/[22m[36mindex-CjwE4LgO.js              [39m[1m[2m305.15 kB[22m[1m[22m[2m │ gzip: 95.74 kB[22m
-[32m✓ built in 2.15s[39m
+[2mdist/[22m[2massets/[22m[35mindex-BcHWkQaK.css             [39m[1m[2m 24.09 kB[22m[1m[22m[2m │ gzip:  5.44 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-VmEsNSaz.js              [39m[1m[2m302.93 kB[22m[1m[22m[2m │ gzip: 95.36 kB[22m
+[32m✓ built in 6.46s[39m
