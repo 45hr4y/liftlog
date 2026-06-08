@@ -5,12 +5,12 @@ import { Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, Li
 
 type Unit = 'kg' | 'lb';
 type Theme = 'light' | 'dark';
-type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 'log' | 'calendar' | 'progress' | 'stats' | 'backup' | 'settings' | 'more';
+type Page = 'home' | 'exercises' | 'exerciseDetail' | 'subtypes' | 'routines' | 'log' | 'calendar' | 'history' | 'progress' | 'stats' | 'backup' | 'settings' | 'more';
 type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
 type BackupSnapshot = { id?: number; name: string; reason: string; createdAt: string; payload: any };
-type Exercise = { id?: number; name: string; muscle: string; equipment: string; createdAt: string };
+type Exercise = { id?: number; name: string; muscle: string; equipment: string; notes?: string; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
 type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
 type Routine = { id?: number; name: string; color: string; archived?: boolean; createdAt: string };
@@ -228,22 +228,23 @@ export default function App() {
       {page==='routines' && <RoutinesPage data={{exercises,subtypes,routines,routineExercises,refresh}} />}
       {page==='log' && <LogPage data={{settings,exercises,subtypes,routines,routineExercises,workouts,sets,activeWorkout,setActiveWorkoutId,refresh}} />}
       {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage}} />}
+      {page==='history' && <HistoryPage data={{exercises,subtypes,routines,workouts,sets}} />}
       {page==='progress' && <ProgressPage data={{settings,exercises,subtypes,workouts,sets}} />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
       {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
     </main>
-    <nav className="tabs fiveTabs">
+    <nav className="tabs fiveTabs premiumTabs">
       <Tab p="home" page={page} setPage={setPage} icon={<Home/>} label="Home"/>
       <Tab p="log" page={page} setPage={setPage} icon={<Play/>} label="Workout"/>
       <Tab p="calendar" page={page} setPage={setPage} icon={<CalendarDays/>} label="Calendar"/>
-      <Tab p="progress" page={page} setPage={setPage} icon={<BarChart3/>} label="Progress"/>
+      <Tab p="history" page={page} setPage={setPage} icon={<ListChecks/>} label="History"/>
       <Tab p="more" page={page} setPage={setPage} icon={<Settings/>} label="More"/>
     </nav>
   </div>
 }
-function title(p:Page){return {home:'Dashboard',exercises:'Exercises',subtypes:'Subtypes',routines:'Routines',log:'Workout',calendar:'Calendar',stats:'Stats',settings:'Settings',exerciseDetail:'Exercise Detail',progress:'Progress',backup:'Backup',more:'More'}[p]}
+function title(p:Page){return {home:'Dashboard',exercises:'Exercises',subtypes:'Subtypes',routines:'Routines',log:'Workout',calendar:'Calendar',history:'History',stats:'Stats',settings:'Settings',exerciseDetail:'Exercise Detail',progress:'Progress',backup:'Backup',more:'More'}[p]}
 function Tab({p,page,setPage,icon,label}:any){return <button className={page===p?'tab active':'tab'} onClick={()=>setPage(p)}>{icon}<span>{label}</span></button>}
 function Card({children, cls=''}:any){return <div className={'card '+cls}>{children}</div>}
 function Pills({children}:any){return <div className="pills">{children}</div>}
@@ -495,6 +496,30 @@ function recoveryClass(v:number) {
   return 'rec0';
 }
 
+
+function durationMinutes(w: Workout) {
+  if (!w.startedAt) return 0;
+  const end = w.endedAt ? new Date(w.endedAt).getTime() : Date.now();
+  return Math.max(0, Math.round((end - new Date(w.startedAt).getTime()) / 60000));
+}
+function workoutSetsFor(w: Workout, sets: WorkoutSet[]) {
+  return sets.filter(s => s.workoutId === w.id);
+}
+function workoutVolume(w: Workout, sets: WorkoutSet[]) {
+  return workoutSetsFor(w, sets).reduce((a,s)=>a+volumeKg(s),0);
+}
+function detectSetPR(newSet: WorkoutSet, allSets: WorkoutSet[]) {
+  const previous = allSets.filter(s=>s.exerciseId===newSet.exerciseId && s.id !== newSet.id && new Date(s.createdAt).getTime() < new Date(newSet.createdAt).getTime());
+  if(!previous.length) return 'First logged set';
+  const heaviest = Math.max(...previous.map(s=>kgValue(s)));
+  const bestVol = Math.max(...previous.map(s=>volumeKg(s)));
+  const bestE = Math.max(...previous.map(s=>e1rm(kgValue(s),s.reps)));
+  if(kgValue(newSet) > heaviest) return 'New weight PR';
+  if(volumeKg(newSet) > bestVol) return 'New set volume PR';
+  if(e1rm(kgValue(newSet),newSet.reps) > bestE) return 'New estimated 1RM PR';
+  return '';
+}
+
 function HomePage({data}:any){
   const {exercises,subtypes,routines,workouts,sets,setPage}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
@@ -652,6 +677,11 @@ function ExerciseDetailPage({data}:any){
       </div>}
     </Card>
     <Card>
+      <h3>Exercise Notes</h3>
+      <textarea placeholder="Technique cues, setup notes, reminders..." defaultValue={ex.notes||''} onBlur={async e=>{await db.exercises.update(ex.id!,{notes:e.target.value});}} />
+      <p className="muted">Notes save when you tap away.</p>
+    </Card>
+    <Card>
       <h3>Last 5 sessions</h3>
       {sessions.length ? sessions.map((row:any)=><div className="sessionCard" key={row.workout.id}>
         <strong>{row.workout.date}</strong>
@@ -762,7 +792,7 @@ function LogPage({data}:any){
 
   return <section className="workoutV15">
     <Card cls="workoutHeaderSticky"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div></Card>
-    <div className="floatingTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Rest</button></div>
+    <div className="floatingTimer smartTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Reset</button><button onClick={()=>setTimer((timer||Date.now())-15000)}>+15</button></div>
     <Card cls="addExercisePanel"><h3>Add exercise during workout</h3><ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(undefined)}} placeholder="Search exercise to add..." /><select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional subtype</option>{subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="secondary" onClick={addCustomExercise}>+ Add Exercise</button></Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; return <Logger key={it.id} item={it} ex={ex} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===ex?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} onSave={()=>setTimer(Date.now())}/> })}
   </section>
@@ -774,7 +804,7 @@ function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Wor
 }
 function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave}:any){
   const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
-  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({});
+  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState('');
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
   const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
@@ -784,13 +814,17 @@ function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUn
     const r=(document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement).value; 
     const rir=(document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement).value; 
     if(!r)return alert('Enter reps'); 
-    await db.sets.add({workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:now()}); 
+    const newRecord: WorkoutSet = {workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:now()};
+    const id = await db.sets.add(newRecord);
+    const pr = detectSetPR({...newRecord,id}, sets);
+    if(pr) setPrMessage(`🏆 ${pr}`);
     onSave(); refresh();
   }
   return <Card cls="loggerV15">
     <details open>
       <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{subtype?.name||'No subtype selected'}</p></div></div></summary>
       <div className="grid2"><label>Subtype<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No subtype</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></label></div>
+      {prMessage && <div className="prToastInline">{prMessage}</div>}
       <div className="setTableV15">
         <div className="setHeaderV15"><span>Set</span><span>Previous</span><span>Weight</span><span>Reps</span><span>RIR</span><span></span></div>
         {Array.from({length:item.sets+extra}).map((_,i)=>{
@@ -1146,6 +1180,39 @@ function BackupPage({data}:any){
         <li>On the other device, press <strong>Import JSON Backup</strong>.</li>
       </ol>
     </Card>
+  </section>
+}
+
+
+function HistoryPage({data}:any){
+  const {exercises,routines,workouts,sets}=data;
+  const [selectedId,setSelectedId]=useState<number|undefined>();
+  const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
+  const selected = completed.find((w:Workout)=>w.id===selectedId);
+
+  if(selected){
+    const ss = workoutSetsFor(selected, sets);
+    const grouped = exercises.map((ex:Exercise)=>({ex, rows:ss.filter((s:WorkoutSet)=>s.exerciseId===ex.id)})).filter((x:any)=>x.rows.length);
+    return <section>
+      <Card cls="premiumCard"><button className="secondary mini" onClick={()=>setSelectedId(undefined)}>← Back to history</button><h2>{selected.title}</h2><p className="muted">{selected.date} · {durationMinutes(selected)} min · {ss.length} sets · {fmtVol(workoutVolume(selected,sets))}</p></Card>
+      {grouped.map((g:any)=><Card key={g.ex.id} cls="historyExercise">
+        <h3>{g.ex.name}</h3>
+        {g.rows.sort((a:WorkoutSet,b:WorkoutSet)=>a.setNumber-b.setNumber).map((s:WorkoutSet)=><div className="historySet" key={s.id}><span>Set {s.setNumber}</span><strong>{s.weight}{s.unit} × {s.reps}</strong><em>{fmtVol(volumeKg(s))}</em></div>)}
+      </Card>)}
+    </section>
+  }
+
+  return <section>
+    <Card cls="hero heroV12"><h2>Workout History</h2><p>Review your completed sessions, volume, duration and exercises.</p></Card>
+    {completed.length ? completed.map((w:Workout)=>{
+      const routine = routines.find((r:Routine)=>r.id===w.routineId);
+      const ss = workoutSetsFor(w, sets);
+      return <Card key={w.id} cls="historyCard" onClick={()=>setSelectedId(w.id)}>
+        <div className="historyAccent" style={{background:routine?.color||'#2563eb'}}/>
+        <div><h3>{w.title}</h3><p>{new Date(w.date).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'})}</p></div>
+        <div className="historyStats"><strong>{fmtVol(workoutVolume(w,sets))}</strong><span>{ss.length} sets · {durationMinutes(w)} min</span></div>
+      </Card>
+    }) : <Card><p className="muted">No completed workouts yet.</p></Card>}
   </section>
 }
 

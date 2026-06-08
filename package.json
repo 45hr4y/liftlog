@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v16-heatmap-search",
-  "version": "16.0.0",
+  "name": "liftlog-v17-performance-polish",
+  "version": "17.0.0",
   "private": true,
   "type": "module",
   "scripts": {

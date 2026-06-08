@@ -188,3 +188,11 @@ Added muscle regions:
 - Volume/recovery heat map toggle.
 - Recovery percentages by muscle.
 - Searchable exercise selector to avoid scrolling.
+
+## v17 Performance + Polish
+- Workout History tab
+- Detailed workout history view
+- PR detection when saving sets
+- Exercise notes in exercise detail
+- Smarter floating rest timer with reset/+15
+- Sleeker bottom navigation colours and glass effect
