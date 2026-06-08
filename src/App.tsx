@@ -319,37 +319,20 @@ function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: Work
   weekSets.forEach(s => {
     const ex = exercises.find(e => e.id === s.exerciseId);
     if (!ex) return;
-    const v = volumeKg(s);
-    const m = ex.muscle;
-    if (m === 'Chest') values.Chest += v;
-    if (m === 'Traps') values.Traps += v;
-    if (m === 'Erectors') values.Erectors += v;
-    if (m === 'Upper Back') values.UpperBack += v;
-    if (m === 'Lats') values.Lats += v;
-    if (m === 'Front Delt') values.FrontDelt += v;
-    if (m === 'Side Delt') values.SideDelt += v;
-    if (m === 'Rear Delt') values.RearDelt += v;
-    if (m === 'Abs') values.Abs += v;
-    if (m === 'Obliques') values.Obliques += v;
-    if (m === 'Quadriceps') values.Quads += v;
-    if (m === 'Hamstrings') values.Hamstrings += v;
-    if (m === 'Adductors') values.Adductors += v;
-    if (m === 'Abductors') values.Abductors += v;
-    if (m === 'Calves') values.Calves += v;
-    if (m === 'Glutes') values.Glutes += v;
-    if (m === 'Biceps') values.Biceps += v;
-    if (m === 'Triceps') values.Triceps += v;
-    if (m === 'Forearms') values.Forearms += v;
+    addWeightedMuscle(values, ex.muscle, volumeKg(s));
   });
   return values;
 }
 
-function BodyHeatMap({values}:{values:Record<string, number>}) {
-  const max = Math.max(...Object.values(values), 1);
-  const cls = (key:string) => `hmPart ${heatIntensityClass(values[key] || 0, max)}`;
-  const label = (key:string, name:string) => <div className="hmLabel"><span className={heatIntensityClass(values[key] || 0, max)}></span>{name}<em>{fmtVol(values[key]||0)}</em></div>;
+function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record<string, number>; exercises?:Exercise[]; workouts?:Workout[]; sets?:WorkoutSet[]}) {
+  const [mode,setMode]=useState<'volume'|'recovery'>('volume');
+  const recovery = recoveryValuesFromVolume(values, exercises, workouts, sets);
+  const display = mode==='volume' ? values : recovery;
+  const max = mode==='volume' ? Math.max(...Object.values(values), 1) : 100;
+  const cls = (key:string) => `hmPart ${mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}`;
+  const label = (key:string, name:string) => <div className="hmLabel"><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></div>;
 
-  return <div className="proHeatMap">
+  return <div className="proHeatMap"><div className="heatToggle"><button className={mode==='volume'?'active':''} onClick={()=>setMode('volume')}>Volume</button><button className={mode==='recovery'?'active':''} onClick={()=>setMode('recovery')}>Recovery</button></div>
     <div className="hmBodies">
       <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Front body muscle heat map">
         <text x="140" y="24" textAnchor="middle" className="hmTitle">FRONT</text>
@@ -439,6 +422,79 @@ function BodyHeatMap({values}:{values:Record<string, number>}) {
 }
 
 
+
+function ExerciseSearchSelect({exercises,value,onChange,placeholder='Search exercises...'}:{exercises:Exercise[];value?:number;onChange:(id:number|undefined)=>void;placeholder?:string}) {
+  const selected = exercises.find(e=>e.id===value);
+  const [q,setQ]=useState(selected?.name || '');
+  const [open,setOpen]=useState(false);
+  useEffect(()=>{ const s=exercises.find(e=>e.id===value); if(s) setQ(s.name); },[value, exercises.length]);
+  const results = exercises.filter(e => `${e.name} ${e.muscle} ${e.equipment}`.toLowerCase().includes(q.toLowerCase())).slice(0,8);
+  return <div className="searchSelect">
+    <input value={q} placeholder={placeholder} onFocus={()=>setOpen(true)} onChange={e=>{setQ(e.target.value);setOpen(true); if(!e.target.value) onChange(undefined)}}/>
+    {open && <div className="searchResults">
+      {results.length ? results.map(e=><button key={e.id} type="button" onClick={()=>{onChange(e.id);setQ(e.name);setOpen(false);}}>
+        <strong>{e.name}</strong><span>{e.muscle} · {e.equipment}</span>
+      </button>) : <p>No matching exercises</p>}
+    </div>}
+  </div>
+}
+
+const secondaryWeights: Record<string, Record<string, number>> = {
+  Chest: { FrontDelt:.35, Triceps:.30 },
+  'Front Delt': { Chest:.20, Triceps:.20 },
+  'Side Delt': { Traps:.15 },
+  'Rear Delt': { UpperBack:.25, Traps:.15 },
+  Traps: { UpperBack:.25, Erectors:.15 },
+  'Upper Back': { Lats:.25, RearDelt:.20, Biceps:.20 },
+  Lats: { UpperBack:.20, Biceps:.25, Forearms:.15 },
+  Erectors: { Glutes:.15, Hamstrings:.15 },
+  Abs: { Obliques:.20 },
+  Obliques: { Abs:.25, Erectors:.10 },
+  Quadriceps: { Adductors:.15, Glutes:.10 },
+  Hamstrings: { Glutes:.30, Erectors:.15 },
+  Adductors: { Quadriceps:.20, Glutes:.10 },
+  Abductors: { Glutes:.35 },
+  Calves: {},
+  Glutes: { Hamstrings:.25, Abductors:.20, Erectors:.15 },
+  Biceps: { Forearms:.20, Lats:.10 },
+  Triceps: { FrontDelt:.10, Chest:.10 },
+  Forearms: { Biceps:.15 }
+};
+
+function muscleKeyFromName(muscle:string) {
+  const map: Record<string,string> = {'Upper Back':'UpperBack','Rear Delt':'RearDelt','Side Delt':'SideDelt','Front Delt':'FrontDelt','Quadriceps':'Quads'};
+  return map[muscle] || muscle;
+}
+function addWeightedMuscle(values:Record<string,number>, muscle:string, amount:number) {
+  const primary = muscleKeyFromName(muscle);
+  if(primary in values) values[primary] += amount;
+  Object.entries(secondaryWeights[muscle] || {}).forEach(([key,weight])=>{ if(key in values) values[key] += amount * weight; });
+}
+function recoveryValuesFromVolume(values:Record<string,number>, exercises:Exercise[], workouts:Workout[], sets:WorkoutSet[]) {
+  const out:Record<string,number> = {};
+  Object.keys(values).forEach(k=>out[k]=0);
+  Object.keys(values).forEach(k=>{
+    const ids = exercises.filter(e=>{
+      const primary = muscleKeyFromName(e.muscle);
+      return primary===k || Object.keys(secondaryWeights[e.muscle]||{}).includes(k);
+    }).map(e=>e.id);
+    const relevant = sets.filter(s=>ids.includes(s.exerciseId));
+    if(!relevant.length){ out[k]=100; return; }
+    const latest = [...relevant].sort((a:WorkoutSet,b:WorkoutSet)=>b.createdAt.localeCompare(a.createdAt))[0];
+    const days = Math.max(0, (Date.now() - new Date(latest.createdAt).getTime()) / 86400000);
+    const recentLoad = Math.min(1, (values[k]||0)/7000);
+    out[k] = Math.min(100, Math.max(5, days*28 + (1-recentLoad)*40));
+  });
+  return out;
+}
+function recoveryClass(v:number) {
+  if (v >= 85) return 'rec4';
+  if (v >= 65) return 'rec3';
+  if (v >= 40) return 'rec2';
+  if (v >= 20) return 'rec1';
+  return 'rec0';
+}
+
 function HomePage({data}:any){
   const {exercises,subtypes,routines,workouts,sets,setPage}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
@@ -514,7 +570,7 @@ function HomePage({data}:any){
         <h3>Weekly Body Heat Map</h3>
         <span className="muted miniLabel">Volume intensity</span>
       </div>
-      <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} />
+      <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} exercises={exercises} workouts={workouts} sets={sets} />
       <div className="heatLegend"><span className="heat0"></span>None <span className="heat1"></span>Light <span className="heat2"></span>Moderate <span className="heat3"></span>High <span className="heat4"></span>Very high</div>
     </Card>
 
@@ -707,7 +763,7 @@ function LogPage({data}:any){
   return <section className="workoutV15">
     <Card cls="workoutHeaderSticky"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div></Card>
     <div className="floatingTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Rest</button></div>
-    <Card cls="addExercisePanel"><h3>Add exercise during workout</h3><select value={addExerciseId??''} onChange={e=>{setAddExerciseId(Number(e.target.value));setAddSubtypeId(undefined)}}><option value="">Choose exercise</option>{exercises.map((e:Exercise)=><option key={e.id} value={e.id}>{e.name}</option>)}</select><select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional subtype</option>{subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="secondary" onClick={addCustomExercise}>+ Add Exercise</button></Card>
+    <Card cls="addExercisePanel"><h3>Add exercise during workout</h3><ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(undefined)}} placeholder="Search exercise to add..." /><select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional subtype</option>{subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="secondary" onClick={addCustomExercise}>+ Add Exercise</button></Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; return <Logger key={it.id} item={it} ex={ex} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===ex?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} onSave={()=>setTimer(Date.now())}/> })}
   </section>
 }

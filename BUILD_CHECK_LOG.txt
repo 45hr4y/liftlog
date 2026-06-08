@@ -1,5 +1,19 @@
 
-> liftlog-v15-workout-calendar-upgrade@15.0.0 build
+added 70 packages, and audited 71 packages in 12s
+
+7 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+---BUILD---
+
+> liftlog-v16-heatmap-search@16.0.0 build
 > tsc && vite build
 
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
@@ -9,6 +23,6 @@ rendering chunks...
 computing gzip size...
 [2mdist/[22m[2massets/[22m[32mmanifest-DyUkWq-m.webmanifest  [39m[1m[2m  0.41 kB[22m[1m[22m
 [2mdist/[22m[32mindex.html                            [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:  0.31 kB[22m
-[2mdist/[22m[2massets/[22m[35mindex-BcHWkQaK.css             [39m[1m[2m 24.09 kB[22m[1m[22m[2m │ gzip:  5.44 kB[22m
-[2mdist/[22m[2massets/[22m[36mindex-VmEsNSaz.js              [39m[1m[2m302.93 kB[22m[1m[22m[2m │ gzip: 95.36 kB[22m
-[32m✓ built in 6.46s[39m
+[2mdist/[22m[2massets/[22m[35mindex-PEdM87YS.css             [39m[1m[2m 25.66 kB[22m[1m[22m[2m │ gzip:  5.70 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-CRPsn362.js              [39m[1m[2m305.00 kB[22m[1m[22m[2m │ gzip: 96.12 kB[22m
+[32m✓ built in 4.00s[39m

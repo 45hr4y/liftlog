@@ -181,3 +181,10 @@ Added muscle regions:
 - Hevy-style set logger with blue completed sets.
 - Previous set weight/reps under each entry.
 - Floating rest timer and active workout resume safeguards.
+
+
+## v16 Heat Map Accuracy + Search
+- Weighted primary/secondary muscle contribution.
+- Volume/recovery heat map toggle.
+- Recovery percentages by muscle.
+- Searchable exercise selector to avoid scrolling.
