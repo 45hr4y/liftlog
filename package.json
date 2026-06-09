@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v19-nutrition-pro",
-  "version": "19.0.0",
+  "name": "liftlog-v22-exercise-catalogue",
+  "version": "22.0.0",
   "private": true,
   "type": "module",
   "scripts": {

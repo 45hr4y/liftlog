@@ -218,3 +218,32 @@ Added Nutrition as a built-in LiftLog page/tab:
 - Caffeine last logged time
 - Meal quality summary
 - Weekly consistency review
+
+## v20 Nutrition iPhone Polish
+- Nutrition score now starts at 0%.
+- Removed automatic caffeine points.
+- Added 0/5 daily habit checklist.
+- Added iPhone quick action card.
+- Larger mobile tap targets and cleaner meal logging.
+
+
+## v21 Builder Upgrade
+
+Added:
+- Secondary muscles for exercises.
+- Heat map and weekly muscle buckets now include selected secondary muscles.
+- Create exercises while building routines.
+- Create machines/subtypes from the routine builder.
+- Add newly created exercises directly into routines.
+- Search-first machine/exercise flow.
+- More streamlined exercise, routine and machine UI.
+
+
+## v22 Exercise Catalogue
+
+Added:
+- 105 starter exercises.
+- Primary muscles and selected secondary muscles for each exercise.
+- Starter Push / Pull / Legs routines if no routines exist yet.
+- Catalogue search and filters for exercises.
+- Existing custom exercises are preserved; the catalogue only fills missing names.

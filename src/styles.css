@@ -1065,3 +1065,186 @@ body[data-theme="dark"] .mealItemPro{background:#020617;border-color:#1e293b}
 .nutritionReviewGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.weekBarsNutrition.pro .miniBar div{background:linear-gradient(180deg,#10b981,#2563eb)}
 @media(max-width:1000px){.nutritionProGrid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:720px){.nutritionHeroGrid,.nutritionCommandCard,.nutritionReviewGrid{grid-template-columns:1fr}.nutritionCommandCard{display:grid}.nutritionProGrid{grid-template-columns:1fr}.mealFormPro{grid-template-columns:1fr}.nutritionOrb{width:96px;height:96px}}
+
+
+/* LiftLog v20 Nutrition iPhone Polish */
+.habitChecklist{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.habitPill{border:1px solid #e2e8f0;border-radius:18px;padding:10px;background:#f8fafc}
+body[data-theme="dark"] .habitPill{background:#020617;border-color:#1e293b}
+.habitPill.done{background:#dcfce7;border-color:#86efac}
+body[data-theme="dark"] .habitPill.done{background:#064e3b;border-color:#10b981}
+.habitPill strong{display:block;font-size:13px}.habitPill span{display:block;margin-top:3px;color:#64748b;font-size:12px;font-weight:800}
+.nutritionQuickAdd{display:none}
+@media(max-width:720px){
+  .nutritionPage{padding-bottom:94px}
+  .nutritionHeroPro{border-radius:24px;padding:20px}
+  .nutritionHeroPro h2{font-size:30px;line-height:1}
+  .nutritionHeroPro p{font-size:15px}
+  .nutritionOrb{width:88px!important;height:88px!important}
+  .nutritionOrb span{font-size:26px!important}
+  .nutritionOrb em{margin-top:-28px!important}
+  .habitChecklist{grid-template-columns:1fr}
+  .habitPill{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 14px}
+  .habitPill span{margin-top:0}
+  .nutritionMetric{border-radius:24px;padding:18px}
+  .nutritionMetric strong{font-size:30px}
+  .nutritionMetric button,.mealFormPro button,.nutritionQuickAdd button{min-height:46px}
+  .nutritionQuickAdd{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:sticky;top:8px;z-index:18;padding:10px;background:rgba(255,255,255,.86);backdrop-filter:blur(18px)}
+  body[data-theme="dark"] .nutritionQuickAdd{background:rgba(15,23,42,.86)}
+  .nutritionQuickAdd button{border-radius:16px;font-size:14px;font-weight:950;background:#f1f5f9}
+  body[data-theme="dark"] .nutritionQuickAdd button{background:#1e293b;color:#f8fafc}
+  .mealPanelPro{border-radius:24px}
+  .mealFormPro input,.mealFormPro select,.mealFormPro textarea{font-size:16px;min-height:48px}
+  .mealItemPro{grid-template-columns:12px 1fr}
+  .mealItemPro button{grid-column:2;width:max-content}
+  .qualityPills{margin-top:8px}
+  .nutritionCommandCard .date-picker{max-width:none;font-size:16px;min-height:50px}
+  .weekBarsNutrition{overflow-x:auto;padding-bottom:4px}
+  .weekDayNutrition{min-width:42px}
+}
+
+
+/* LiftLog v21 Builder Upgrade */
+.builderHero{
+  background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(16,185,129,.08));
+}
+.builderHero h2{
+  margin:6px 0;
+  font-size:clamp(28px,5vw,42px);
+  letter-spacing:-.04em;
+}
+.builderCard{
+  display:grid;
+  gap:12px;
+}
+.builderGrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.builderSplit{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+.builderOptional{
+  display:grid;
+  gap:10px;
+  padding:12px;
+  border:1px dashed #cbd5e1;
+  border-radius:18px;
+  background:#f8fafc;
+}
+body[data-theme="dark"] .builderOptional{
+  background:#020617;
+  border-color:#334155;
+}
+.secondaryMuscleBox{
+  display:grid;
+  gap:8px;
+}
+.secondaryMuscleBox > label{
+  font-weight:900;
+  color:#64748b;
+}
+.muscleChipGrid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+}
+.muscleChip{
+  border-radius:999px;
+  padding:8px 10px;
+  font-size:12px;
+  font-weight:900;
+  background:#f1f5f9;
+  color:#475569;
+}
+body[data-theme="dark"] .muscleChip{
+  background:#1e293b;
+  color:#cbd5e1;
+}
+.muscleChip.active{
+  background:#0f172a;
+  color:#fff;
+}
+body[data-theme="dark"] .muscleChip.active{
+  background:#f8fafc;
+  color:#0f172a;
+}
+.inlineCreate{
+  border:1px solid #e2e8f0;
+  border-radius:18px;
+  padding:12px;
+  background:#fff;
+}
+body[data-theme="dark"] .inlineCreate{
+  background:#020617;
+  border-color:#1e293b;
+}
+.inlineCreate summary{
+  cursor:pointer;
+  font-weight:950;
+  color:#2563eb;
+}
+.exerciseListPro{
+  display:grid;
+  gap:12px;
+}
+.exerciseCardPro{
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.exerciseCardPro:hover{
+  transform:translateY(-1px);
+}
+.routineItemPro{
+  border-left:5px solid #2563eb;
+}
+.checkLine{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:900;
+  color:#64748b;
+}
+.checkLine input{
+  width:auto;
+}
+@media(max-width:850px){
+  .builderGrid{
+    grid-template-columns:1fr;
+  }
+  .builderCard input,
+  .builderCard select,
+  .builderCard button,
+  .inlineCreate input,
+  .inlineCreate select,
+  .inlineCreate button{
+    min-height:46px;
+    font-size:16px;
+  }
+  .muscleChip{
+    padding:10px 12px;
+    font-size:13px;
+  }
+}
+
+/* LiftLog v22 Exercise Catalogue */
+.catalogueFilters{
+  display:grid;
+  grid-template-columns:2fr 1fr 1fr;
+  gap:10px;
+  align-items:center;
+}
+.catalogueFilters p{
+  grid-column:1/-1;
+  margin:0;
+}
+.exerciseCardPro h3{
+  letter-spacing:-.02em;
+}
+@media(max-width:850px){
+  .catalogueFilters{
+    grid-template-columns:1fr;
+  }
+}

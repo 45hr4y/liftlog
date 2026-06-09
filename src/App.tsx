@@ -10,7 +10,7 @@ type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
 type BackupSnapshot = { id?: number; name: string; reason: string; createdAt: string; payload: any };
-type Exercise = { id?: number; name: string; muscle: string; equipment: string; notes?: string; createdAt: string };
+type Exercise = { id?: number; name: string; muscle: string; secondaryMuscles?: string[]; equipment: string; notes?: string; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
 type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
 type Routine = { id?: number; name: string; color: string; archived?: boolean; createdAt: string };
@@ -128,37 +128,917 @@ const muscles = ['Traps','Erectors','Upper Back','Lats','Rear Delt','Side Delt',
 const equipment = ['Machine','Cable','Dumbbell','Barbell','Smith Machine','Bodyweight','Other'];
 const colours = ['#7c3aed','#2563eb','#16a34a','#dc2626','#ea580c','#0891b2','#db2777','#4b5563'];
 
-async function seed() {
-  if (!await db.settings.get('settings')) await db.settings.put({ id:'settings', unit:'kg', theme:'light' });
-  if (await db.exercises.count()) return;
-  const t = now();
-  const ids = await db.exercises.bulkAdd([
-    {name:'Incline Chest Press', muscle:'Chest', equipment:'Machine', createdAt:t},
-    {name:'Lateral Raise', muscle:'Side Delt', equipment:'Machine', createdAt:t},
-    {name:'Pec Fly', muscle:'Chest', equipment:'Cable', createdAt:t},
-    {name:'Shoulder Press', muscle:'Front Delt', equipment:'Machine', createdAt:t},
-    {name:'Rear Delt Fly', muscle:'Rear Delt', equipment:'Machine', createdAt:t},
-  ], {allKeys:true}) as number[];
-  await db.subtypes.bulkAdd([
-    {exerciseId:ids[1], name:'Technogym Lateral Raise', defaultUnit:'kg', settings:[
-      {id:'seat',label:'Seat Position',type:'dropdown',options:['1','2','3','4','5'],defaultValue:'3'},
-      {id:'neutral',label:'Neutral Grip',type:'checkbox',defaultValue:true}
-    ], createdAt:t},
-    {exerciseId:ids[1], name:'Prime Lateral Raise', defaultUnit:'lb', settings:[
-      {id:'seat',label:'Seat Position',type:'dropdown',options:['1','2','3','4','5'],defaultValue:'2'},
-      {id:'top',label:'Top Resistance',type:'dropdown',options:['1','2','3','4','5'],defaultValue:'3'}
-    ], createdAt:t}
-  ]);
-  const r = await db.routines.add({name:'Upper Push / Shoulders', color:'#7c3aed', createdAt:t});
-  await db.routineExercises.bulkAdd([
-    {routineId:r, exerciseId:ids[0], order:1, sets:4, reps:'8-12', rest:90, createdAt:t},
-    {routineId:r, exerciseId:ids[1], subtypeId:1, order:2, sets:4, reps:'10-15', rest:90, createdAt:t},
-    {routineId:r, exerciseId:ids[2], order:3, sets:4, reps:'10-15', rest:90, createdAt:t},
-    {routineId:r, exerciseId:ids[3], order:4, sets:4, reps:'8-12', rest:120, createdAt:t},
-    {routineId:r, exerciseId:ids[4], order:5, sets:4, reps:'10-15', rest:90, createdAt:t},
-  ]);
-}
+const starterExercises: Omit<Exercise, 'id' | 'createdAt'>[] = [
+  {
+    "name": "Dumbbell Lateral Raise",
+    "muscle": "Side Delt",
+    "secondaryMuscles": [
+      "Traps"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Cable Lateral Raise",
+    "muscle": "Side Delt",
+    "secondaryMuscles": [
+      "Traps"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Machine Lateral Raise",
+    "muscle": "Side Delt",
+    "secondaryMuscles": [
+      "Traps"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Seated Dumbbell Shoulder Press",
+    "muscle": "Front Delt",
+    "secondaryMuscles": [
+      "Side Delt",
+      "Triceps"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Smith Machine Shoulder Press",
+    "muscle": "Front Delt",
+    "secondaryMuscles": [
+      "Side Delt",
+      "Triceps"
+    ],
+    "equipment": "Smith Machine"
+  },
+  {
+    "name": "Arnold Press",
+    "muscle": "Front Delt",
+    "secondaryMuscles": [
+      "Side Delt",
+      "Triceps"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Rear Delt Fly",
+    "muscle": "Rear Delt",
+    "secondaryMuscles": [
+      "Upper Back"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Reverse Pec Deck",
+    "muscle": "Rear Delt",
+    "secondaryMuscles": [
+      "Upper Back"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Face Pull",
+    "muscle": "Rear Delt",
+    "secondaryMuscles": [
+      "Traps",
+      "Upper Back"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Cable Y Raise",
+    "muscle": "Side Delt",
+    "secondaryMuscles": [
+      "Rear Delt",
+      "Traps"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Upright Row",
+    "muscle": "Side Delt",
+    "secondaryMuscles": [
+      "Traps",
+      "Biceps"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Barbell Bench Press",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt",
+      "Triceps"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Incline Barbell Bench Press",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt",
+      "Triceps"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Decline Bench Press",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Dumbbell Bench Press",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt",
+      "Triceps"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Incline Dumbbell Press",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt",
+      "Triceps"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Machine Chest Press",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt",
+      "Triceps"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Pec Deck",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Cable Fly",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Low to High Cable Fly",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Front Delt"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Chest Dip",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Front Delt"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Push Up",
+    "muscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Front Delt",
+      "Abs"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Pull Up",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Forearms",
+      "Upper Back"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Chin Up",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Forearms"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Lat Pulldown",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Forearms"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Neutral Grip Pulldown",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Upper Back"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Single Arm Lat Pulldown",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Obliques"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Seated Cable Row",
+    "muscle": "Upper Back",
+    "secondaryMuscles": [
+      "Lats",
+      "Biceps",
+      "Rear Delt"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Chest Supported Row",
+    "muscle": "Upper Back",
+    "secondaryMuscles": [
+      "Lats",
+      "Rear Delt",
+      "Biceps"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "T-Bar Row",
+    "muscle": "Upper Back",
+    "secondaryMuscles": [
+      "Lats",
+      "Rear Delt",
+      "Biceps"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Single Arm Dumbbell Row",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Upper Back",
+      "Biceps",
+      "Forearms"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Machine Row",
+    "muscle": "Upper Back",
+    "secondaryMuscles": [
+      "Lats",
+      "Biceps"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "High Row Machine",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Upper Back",
+      "Biceps"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Straight Arm Pulldown",
+    "muscle": "Lats",
+    "secondaryMuscles": [
+      "Triceps",
+      "Abs"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Barbell Row",
+    "muscle": "Upper Back",
+    "secondaryMuscles": [
+      "Lats",
+      "Rear Delt",
+      "Biceps",
+      "Erectors"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Barbell Shrug",
+    "muscle": "Traps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Dumbbell Shrug",
+    "muscle": "Traps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Smith Machine Shrug",
+    "muscle": "Traps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Smith Machine"
+  },
+  {
+    "name": "Farmer Carry",
+    "muscle": "Traps",
+    "secondaryMuscles": [
+      "Forearms",
+      "Abs",
+      "Obliques"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Conventional Deadlift",
+    "muscle": "Erectors",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Traps",
+      "Forearms"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Romanian Deadlift",
+    "muscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Erectors",
+      "Forearms"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Dumbbell Romanian Deadlift",
+    "muscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Erectors"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Rack Pull",
+    "muscle": "Erectors",
+    "secondaryMuscles": [
+      "Traps",
+      "Glutes",
+      "Forearms"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Back Extension",
+    "muscle": "Erectors",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Good Morning",
+    "muscle": "Erectors",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Barbell Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "EZ Bar Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "EZ Bar"
+  },
+  {
+    "name": "Cable Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Incline Dumbbell Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Preacher Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Hammer Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Bayesian Cable Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Concentration Curl",
+    "muscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Rope Triceps Pushdown",
+    "muscle": "Triceps",
+    "secondaryMuscles": [],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Straight Bar Triceps Pushdown",
+    "muscle": "Triceps",
+    "secondaryMuscles": [],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Skull Crusher",
+    "muscle": "Triceps",
+    "secondaryMuscles": [
+      "Front Delt"
+    ],
+    "equipment": "EZ Bar"
+  },
+  {
+    "name": "Overhead Triceps Extension",
+    "muscle": "Triceps",
+    "secondaryMuscles": [
+      "Front Delt"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Machine Dip",
+    "muscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Close Grip Bench Press",
+    "muscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest",
+      "Front Delt"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Dumbbell Overhead Extension",
+    "muscle": "Triceps",
+    "secondaryMuscles": [
+      "Front Delt"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Wrist Curl",
+    "muscle": "Forearms",
+    "secondaryMuscles": [],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Reverse Curl",
+    "muscle": "Forearms",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "equipment": "EZ Bar"
+  },
+  {
+    "name": "Reverse Wrist Curl",
+    "muscle": "Forearms",
+    "secondaryMuscles": [],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Crunch",
+    "muscle": "Abs",
+    "secondaryMuscles": [],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Machine Crunch",
+    "muscle": "Abs",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Cable Crunch",
+    "muscle": "Abs",
+    "secondaryMuscles": [],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Hanging Leg Raise",
+    "muscle": "Abs",
+    "secondaryMuscles": [
+      "Obliques"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Reverse Crunch",
+    "muscle": "Abs",
+    "secondaryMuscles": [],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Ab Wheel Rollout",
+    "muscle": "Abs",
+    "secondaryMuscles": [
+      "Obliques",
+      "Erectors"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Plank",
+    "muscle": "Abs",
+    "secondaryMuscles": [
+      "Obliques",
+      "Erectors"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Russian Twist",
+    "muscle": "Obliques",
+    "secondaryMuscles": [
+      "Abs"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Cable Woodchop",
+    "muscle": "Obliques",
+    "secondaryMuscles": [
+      "Abs"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Side Plank",
+    "muscle": "Obliques",
+    "secondaryMuscles": [
+      "Abs"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Pallof Press",
+    "muscle": "Obliques",
+    "secondaryMuscles": [
+      "Abs"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Back Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Erectors",
+      "Abs"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Front Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Abs",
+      "Erectors"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Hack Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Pendulum Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Leg Press",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Adductors"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Leg Extension",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Bulgarian Split Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Adductors"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Walking Lunge",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Smith Machine Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Smith Machine"
+  },
+  {
+    "name": "Goblet Squat",
+    "muscle": "Quadriceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Abs"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "Seated Leg Curl",
+    "muscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Calves"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Lying Leg Curl",
+    "muscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Calves"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Standing Leg Curl",
+    "muscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Calves"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Nordic Curl",
+    "muscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Hip Thrust",
+    "muscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Quadriceps"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Machine Hip Thrust",
+    "muscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Glute Bridge",
+    "muscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Cable Kickback",
+    "muscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Step Up",
+    "muscle": "Glutes",
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Hamstrings"
+    ],
+    "equipment": "Dumbbell"
+  },
+  {
+    "name": "45 Degree Glute Extension",
+    "muscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Erectors"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Adductor Machine",
+    "muscle": "Adductors",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Copenhagen Plank",
+    "muscle": "Adductors",
+    "secondaryMuscles": [
+      "Abs",
+      "Obliques"
+    ],
+    "equipment": "Bodyweight"
+  },
+  {
+    "name": "Wide Stance Squat",
+    "muscle": "Adductors",
+    "secondaryMuscles": [
+      "Glutes",
+      "Quadriceps"
+    ],
+    "equipment": "Barbell"
+  },
+  {
+    "name": "Abductor Machine",
+    "muscle": "Abductors",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Cable Hip Abduction",
+    "muscle": "Abductors",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Cable"
+  },
+  {
+    "name": "Lateral Band Walk",
+    "muscle": "Abductors",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "equipment": "Band"
+  },
+  {
+    "name": "Standing Calf Raise",
+    "muscle": "Calves",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Seated Calf Raise",
+    "muscle": "Calves",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Leg Press Calf Raise",
+    "muscle": "Calves",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Donkey Calf Raise",
+    "muscle": "Calves",
+    "secondaryMuscles": [],
+    "equipment": "Machine"
+  },
+  {
+    "name": "Single Leg Calf Raise",
+    "muscle": "Calves",
+    "secondaryMuscles": [],
+    "equipment": "Bodyweight"
+  }
+];
 
+async function seed(){
+  const s=await db.settings.get('settings');
+  if(!s) await db.settings.put({id:'settings',unit:'kg',theme:'light'});
+
+  const existing = await db.exercises.toArray();
+  const byName = new Set(existing.map(e=>e.name.toLowerCase().trim()));
+  let added = 0;
+
+  for (const item of starterExercises) {
+    const key = item.name.toLowerCase().trim();
+    if (!byName.has(key)) {
+      await db.exercises.add({...item, createdAt:now()});
+      byName.add(key);
+      added++;
+    }
+  }
+
+  // Starter routine only if there are no routines yet.
+  const routineCount = await db.routines.count();
+  if(routineCount===0){
+    const pushId = await db.routines.add({name:'Push Starter', color:'#2563eb', archived:false, createdAt:now()});
+    const pullId = await db.routines.add({name:'Pull Starter', color:'#10b981', archived:false, createdAt:now()});
+    const legsId = await db.routines.add({name:'Legs Starter', color:'#f97316', archived:false, createdAt:now()});
+    const all = await db.exercises.toArray();
+    async function addToRoutine(routineId:number, names:string[]){
+      let order=1;
+      for(const name of names){
+        const ex = all.find(e=>e.name===name);
+        if(ex?.id) await db.routineExercises.add({routineId,exerciseId:ex.id,order:order++,sets:3,reps:'8-12',rest:90,createdAt:now()});
+      }
+    }
+    await addToRoutine(pushId,['Barbell Bench Press','Incline Dumbbell Press','Machine Lateral Raise','Rope Triceps Pushdown']);
+    await addToRoutine(pullId,['Lat Pulldown','Seated Cable Row','Reverse Pec Deck','EZ Bar Curl']);
+    await addToRoutine(legsId,['Hack Squat','Romanian Deadlift','Leg Extension','Seated Leg Curl','Standing Calf Raise']);
+  }
+}
 
 function allTimePRsForExercise(exerciseId: number | undefined, sets: WorkoutSet[]) {
   if (!exerciseId) return null;
@@ -222,7 +1102,7 @@ export default function App() {
     </header>
     <main>
       {page==='home' && <HomePage data={{exercises,subtypes,routines,workouts,sets,plannedWorkouts,setPage}} />}
-      {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,refresh,setPage,setSelectedExerciseId}} />}
+      {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,routines,routineExercises,refresh,setPage,setSelectedExerciseId}} />}
       {page==='exerciseDetail' && <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} />}
       {page==='subtypes' && <SubtypesPage data={{exercises,subtypes,refresh}} />}
       {page==='routines' && <RoutinesPage data={{exercises,subtypes,routines,routineExercises,refresh}} />}
@@ -322,7 +1202,7 @@ function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: Work
   weekSets.forEach(s => {
     const ex = exercises.find(e => e.id === s.exerciseId);
     if (!ex) return;
-    addWeightedMuscle(values, ex.muscle, volumeKg(s));
+    addWeightedMuscle(values, ex.muscle, volumeKg(s), ex.secondaryMuscles || []);
   });
   return values;
 }
@@ -468,10 +1348,14 @@ function muscleKeyFromName(muscle:string) {
   const map: Record<string,string> = {'Upper Back':'UpperBack','Rear Delt':'RearDelt','Side Delt':'SideDelt','Front Delt':'FrontDelt','Quadriceps':'Quads'};
   return map[muscle] || muscle;
 }
-function addWeightedMuscle(values:Record<string,number>, muscle:string, amount:number) {
+function addWeightedMuscle(values:Record<string,number>, muscle:string, amount:number, selectedSecondaries:string[] = []) {
   const primary = muscleKeyFromName(muscle);
   if(primary in values) values[primary] += amount;
   Object.entries(secondaryWeights[muscle] || {}).forEach(([key,weight])=>{ if(key in values) values[key] += amount * weight; });
+  selectedSecondaries.forEach(m=>{
+    const key = muscleKeyFromName(m);
+    if(key in values) values[key] += amount * 0.35;
+  });
 }
 function recoveryValuesFromVolume(values:Record<string,number>, exercises:Exercise[], workouts:Workout[], sets:WorkoutSet[]) {
   const out:Record<string,number> = {};
@@ -627,34 +1511,100 @@ function HomePage({data}:any){
 function Metric({n,l}:any){return <Card cls="metric"><strong>{n}</strong><span>{l}</span></Card>}
 function Heat({label,value}:any){return <div className="heat"><span>{label}</span><div><b style={{width:`${Math.min(100,value*14)}%`}}/></div><em>{value}</em></div>}
 
+
+function SecondaryMusclePicker({primary,value,onChange}:{primary:string;value:string[];onChange:(v:string[])=>void}) {
+  const options = muscles.filter(m=>m!==primary && m!=='Other');
+  function toggle(m:string){
+    onChange(value.includes(m) ? value.filter(x=>x!==m) : [...value,m]);
+  }
+  return <div className="secondaryMuscleBox">
+    <label>Secondary muscles</label>
+    <div className="muscleChipGrid">
+      {options.map(m=><button type="button" key={m} className={value.includes(m)?'muscleChip active':'muscleChip'} onClick={()=>toggle(m)}>{m}</button>)}
+    </div>
+  </div>
+}
+function MusclePills({ex}:{ex:Exercise}) {
+  return <Pills><span>Primary: {ex.muscle}</span>{(ex.secondaryMuscles||[]).map(m=><span key={m}>+ {m}</span>)}<span>{ex.equipment}</span></Pills>
+}
+async function quickCreateExercise(name:string, muscle:string, secondaryMuscles:string[], equip:string) {
+  if(!name.trim()) throw new Error('Exercise name required');
+  return await db.exercises.add({name:name.trim(),muscle,secondaryMuscles,equipment:equip,createdAt:now()});
+}
+
 function ExercisesPage({data}:any){
-  const {exercises,subtypes,sets,workouts,refresh,setPage,setSelectedExerciseId}=data;
-  const [name,setName]=useState(''); const [muscle,setMuscle]=useState('Side Delt'); const [equip,setEquip]=useState('Machine');
-  const [editingId,setEditingId]=useState<number|undefined>(); const [editName,setEditName]=useState(''); const [editMuscle,setEditMuscle]=useState('Side Delt'); const [editEquip,setEditEquip]=useState('Machine');
+  const {exercises,subtypes,sets,refresh,setPage,setSelectedExerciseId,routines,routineExercises}=data;
+  const [name,setName]=useState(''); const [muscle,setMuscle]=useState('Side Delt'); const [secondary,setSecondary]=useState<string[]>([]); const [equip,setEquip]=useState('Machine');
+  const [search,setSearch]=useState(''); const [filterMuscle,setFilterMuscle]=useState('All'); const [filterEquip,setFilterEquip]=useState('All');
+  const [quickRoutineId,setQuickRoutineId]=useState<number|undefined>();
+  const [makeSubtype,setMakeSubtype]=useState(false); const [subtypeName,setSubtypeName]=useState(''); const [unit,setUnit]=useState<Unit>('kg');
+  const [editingId,setEditingId]=useState<number|undefined>(); const [editName,setEditName]=useState(''); const [editMuscle,setEditMuscle]=useState('Side Delt'); const [editSecondary,setEditSecondary]=useState<string[]>([]); const [editEquip,setEditEquip]=useState('Machine');
 
-  async function add(){ if(!name.trim()) return alert('Exercise name required'); await db.exercises.add({name:name.trim(),muscle,equipment:equip,createdAt:now()}); setName(''); refresh(); }
+  async function add(){
+    try{
+      const id=await quickCreateExercise(name,muscle,secondary,equip);
+      if(makeSubtype && subtypeName.trim()) await db.subtypes.add({exerciseId:id,name:subtypeName.trim(),defaultUnit:unit,settings:[],createdAt:now()});
+      if(quickRoutineId){
+        const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===quickRoutineId);
+        await db.routineExercises.add({routineId:quickRoutineId,exerciseId:id,order:current.length+1,sets:3,reps:'8-12',rest:90,createdAt:now()});
+      }
+      setName(''); setSecondary([]); setSubtypeName(''); setMakeSubtype(false); refresh();
+    }catch(e:any){ alert(e.message || 'Could not create exercise'); }
+  }
   async function del(ex:Exercise){ if(!confirm('Delete this exercise, its subtypes, and remove it from routines? Past set history remains.')) return; await db.exercises.delete(ex.id!); const ss=await db.subtypes.where('exerciseId').equals(ex.id!).toArray(); for(const s of ss) await db.subtypes.delete(s.id!); const rs=await db.routineExercises.where('exerciseId').equals(ex.id!).toArray(); for(const r of rs) await db.routineExercises.delete(r.id!); refresh(); }
-  function beginEdit(ex:Exercise){ setEditingId(ex.id); setEditName(ex.name); setEditMuscle(ex.muscle); setEditEquip(ex.equipment); }
-  async function saveEdit(){ if(!editingId) return; await db.exercises.update(editingId,{name:editName,muscle:editMuscle,equipment:editEquip}); setEditingId(undefined); refresh(); }
+  function beginEdit(ex:Exercise){ setEditingId(ex.id); setEditName(ex.name); setEditMuscle(ex.muscle); setEditSecondary(ex.secondaryMuscles||[]); setEditEquip(ex.equipment); }
+  async function saveEdit(){ if(!editingId) return; await db.exercises.update(editingId,{name:editName,muscle:editMuscle,secondaryMuscles:editSecondary,equipment:editEquip}); setEditingId(undefined); refresh(); }
 
-  return <section><Card><h3>Add Exercise</h3><input placeholder="Exercise name" value={name} onChange={e=>setName(e.target.value)}/><select value={muscle} onChange={e=>setMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={equip} onChange={e=>setEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select><button className="primary" onClick={add}><Plus/>Save Exercise</button></Card>
-  {exercises.map((ex:Exercise)=>{ const prs=allTimePRsForExercise(ex.id, sets); return <Card key={ex.id}>
-    {editingId===ex.id ? <div>
-      <input value={editName} onChange={e=>setEditName(e.target.value)}/>
-      <select value={editMuscle} onChange={e=>setEditMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select>
-      <select value={editEquip} onChange={e=>setEditEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select>
-      <div className="grid2"><button className="primary" onClick={saveEdit}>Save edit</button><button className="secondary" onClick={()=>setEditingId(undefined)}>Cancel</button></div>
-    </div> : <div>
-      <div className="row">
-        <div onClick={()=>{setSelectedExerciseId(ex.id); setPage('exerciseDetail')}} className="tapArea">
-          <h3>{ex.name}</h3>
-          <Pills><span>{ex.muscle}</span><span>{ex.equipment}</span><span>{subtypes.filter((s:Subtype)=>s.exerciseId===ex.id).length} subtypes</span>{prs&&<span>{prs.setCount} sets logged</span>}</Pills>
-        </div>
-        <div className="iconStack"><button className="smallAction" onClick={()=>beginEdit(ex)}>Edit</button><button className="trash" onClick={()=>del(ex)}><Trash2/></button></div>
+  const filteredExercises = exercises.filter((ex:Exercise)=>{
+    const q = search.toLowerCase();
+    const matchesSearch = !q || `${ex.name} ${ex.muscle} ${(ex.secondaryMuscles||[]).join(' ')} ${ex.equipment}`.toLowerCase().includes(q);
+    const matchesMuscle = filterMuscle==='All' || ex.muscle===filterMuscle || (ex.secondaryMuscles||[]).includes(filterMuscle);
+    const matchesEquip = filterEquip==='All' || ex.equipment===filterEquip;
+    return matchesSearch && matchesMuscle && matchesEquip;
+  });
+
+  return <section>
+    <Card cls="builderHero">
+      <div><span className="eyebrow">Exercise Builder</span><h2>Create exercises faster</h2><p className="muted">Add primary muscles, secondary muscles, machines and optionally drop the exercise straight into a routine.</p></div>
+    </Card>
+    <Card cls="catalogueFilters"><input placeholder="Search catalogue e.g. bench, pulldown, curl..." value={search} onChange={e=>setSearch(e.target.value)}/><select value={filterMuscle} onChange={e=>setFilterMuscle(e.target.value)}><option>All</option>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={filterEquip} onChange={e=>setFilterEquip(e.target.value)}><option>All</option>{equipment.map(e=><option key={e}>{e}</option>)}</select><p className="muted">{filteredExercises.length} exercises shown · {exercises.length} total</p></Card>
+    <Card cls="builderCard">
+      <h3>Add Exercise</h3>
+      <div className="builderGrid">
+        <input placeholder="Exercise name" value={name} onChange={e=>setName(e.target.value)}/>
+        <select value={muscle} onChange={e=>{setMuscle(e.target.value); setSecondary(secondary.filter(m=>m!==e.target.value));}}>{muscles.map(m=><option key={m}>{m}</option>)}</select>
+        <select value={equip} onChange={e=>setEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select>
       </div>
-      {prs && <div className="quickPRs"><span>Heaviest {Math.round(kgValue(prs.heaviest)*10)/10}kg</span><span>Best e1RM {e1rm(kgValue(prs.bestE1RM), prs.bestE1RM.reps)}kg</span></div>}
-    </div>}
-  </Card>})}</section>
+      <SecondaryMusclePicker primary={muscle} value={secondary} onChange={setSecondary}/>
+      <div className="builderOptional">
+        <label className="checkLine"><input type="checkbox" checked={makeSubtype} onChange={e=>setMakeSubtype(e.target.checked)}/> Also create machine/subtype</label>
+        {makeSubtype&&<div className="builderGrid"><input placeholder="Machine/subtype name e.g. Prime Lateral Raise" value={subtypeName} onChange={e=>setSubtypeName(e.target.value)}/><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div>}
+        <label>Add straight to routine</label>
+        <select value={quickRoutineId??''} onChange={e=>setQuickRoutineId(e.target.value?Number(e.target.value):undefined)}><option value="">Not now</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>
+      </div>
+      <button className="primary" onClick={add}><Plus/>Save Exercise</button>
+    </Card>
+    <div className="exerciseListPro">
+    {filteredExercises.map((ex:Exercise)=>{ const prs=allTimePRsForExercise(ex.id, sets); return <Card key={ex.id} cls="exerciseCardPro">
+      {editingId===ex.id ? <div>
+        <input value={editName} onChange={e=>setEditName(e.target.value)}/>
+        <div className="builderGrid"><select value={editMuscle} onChange={e=>{setEditMuscle(e.target.value); setEditSecondary(editSecondary.filter(m=>m!==e.target.value));}}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={editEquip} onChange={e=>setEditEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div>
+        <SecondaryMusclePicker primary={editMuscle} value={editSecondary} onChange={setEditSecondary}/>
+        <div className="grid2"><button className="primary" onClick={saveEdit}>Save edit</button><button className="secondary" onClick={()=>setEditingId(undefined)}>Cancel</button></div>
+      </div> : <div>
+        <div className="row">
+          <div onClick={()=>{setSelectedExerciseId(ex.id); setPage('exerciseDetail')}} className="tapArea">
+            <h3>{ex.name}</h3>
+            <MusclePills ex={ex}/>
+            <Pills><span>{subtypes.filter((s:Subtype)=>s.exerciseId===ex.id).length} machines</span>{prs&&<span>{prs.setCount} sets logged</span>}</Pills>
+          </div>
+          <div className="iconStack"><button className="smallAction" onClick={()=>beginEdit(ex)}>Edit</button><button className="trash" onClick={()=>del(ex)}><Trash2/></button></div>
+        </div>
+        {prs && <div className="quickPRs"><span>Heaviest {Math.round(kgValue(prs.heaviest)*10)/10}kg</span><span>Best e1RM {e1rm(kgValue(prs.bestE1RM), prs.bestE1RM.reps)}kg</span></div>}
+      </div>}
+    </Card>})}
+    </div>
+  </section>
 }
 
 function ExerciseDetailPage({data}:any){
@@ -698,42 +1648,55 @@ function SubtypesPage({data}:any){
   const {exercises,subtypes,refresh}=data;
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>();
   const [settings,setSettings]=useState<MachineSetting[]>([]); const [label,setLabel]=useState(''); const [type,setType]=useState<SettingType>('dropdown'); const [opts,setOpts]=useState('1,2,3,4,5');
+  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
+
   function addSetting(){ if(!label.trim())return; setSettings([...settings,{id:crypto.randomUUID(),label:label.trim(),type,options:type==='dropdown'?opts.split(',').map(x=>x.trim()):undefined,defaultValue:type==='checkbox'?false:''}]); setLabel(''); }
+  async function createExerciseHere(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
   async function add(){ if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); await db.subtypes.add({exerciseId,name:name.trim(),defaultUnit:unit,photo,settings,createdAt:now()}); setName(''); setPhoto(undefined); setSettings([]); setUnit('kg'); refresh(); }
   async function del(s:Subtype){ if(!confirm('Delete this subtype? Past set logs remain.'))return; await db.subtypes.delete(s.id!); const rs=await db.routineExercises.where('subtypeId').equals(s.id!).toArray(); for(const r of rs) await db.routineExercises.update(r.id!,{subtypeId:undefined}); refresh(); }
-  return <section><Card><h3>Add Machine Subtype</h3><select value={exerciseId??''} onChange={e=>setExerciseId(Number(e.target.value))}><option value="">Choose exercise</option>{exercises.map((e:Exercise)=><option key={e.id} value={e.id}>{e.name}</option>)}</select><input placeholder="e.g. Prime Lateral Raise" value={name} onChange={e=>setName(e.target.value)}/><label>Default unit for this exact machine</label><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select><label className="upload"><ImagePlus/> Add one machine photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setPhoto(e.target.files?.[0])}/></label>{photo&&<img className="preview" src={blobUrl(photo)}/>}<h4>Machine settings</h4><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}<button className="secondary" onClick={addSetting}>Add Setting</button><Pills>{settings.map(s=><span key={s.id}>{s.label} · {s.type}</span>)}</Pills><button className="primary" onClick={add}>Save Subtype</button></Card>
-  {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p><Pills><span>{s.defaultUnit}</span>{s.settings.map(x=><span key={x.id}>{x.label}</span>)}</Pills></div></Card>})}</section>
+  return <section>
+    <Card cls="builderHero"><span className="eyebrow">Machine Builder</span><h2>Machines belong to exercises</h2><p className="muted">Search for an exercise, or create one here first, then save the exact machine/subtype with its own unit and settings.</p></Card>
+    <Card cls="builderCard">
+      <h3>Add Machine/Subtype</h3>
+      <ExerciseSearchSelect exercises={exercises} value={exerciseId} onChange={setExerciseId} placeholder="Search exercise for this machine..."/>
+      <details className="inlineCreate"><summary>Need a new exercise first?</summary>
+        <div className="builderGrid"><input placeholder="New exercise name" value={newExName} onChange={e=>setNewExName(e.target.value)}/><select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={newExEquip} onChange={e=>setNewExEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div>
+        <SecondaryMusclePicker primary={newExMuscle} value={newExSecondary} onChange={setNewExSecondary}/>
+        <button className="secondary" onClick={createExerciseHere}>Create and select exercise</button>
+      </details>
+      <input placeholder="e.g. Prime Lateral Raise" value={name} onChange={e=>setName(e.target.value)}/>
+      <label>Default unit for this exact machine</label><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
+      <label className="upload"><ImagePlus/> Add one machine photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setPhoto(e.target.files?.[0])}/></label>{photo&&<img className="preview" src={blobUrl(photo)}/>}
+      <h4>Machine settings</h4><div className="builderGrid"><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}</div>
+      <button className="secondary" onClick={addSetting}>Add Setting</button><Pills>{settings.map(s=><span key={s.id}>{s.label} · {s.type}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
+    </Card>
+    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{s.defaultUnit}</span>{s.settings.map(x=><span key={x.id}>{x.label}</span>)}</Pills></div></Card>})}
+  </section>
 }
 
 function RoutinesPage({data}:any){
   const {exercises,subtypes,routines,routineExercises,refresh}=data;
   const [routineName,setRoutineName]=useState(''); const [colour,setColour]=useState('#7c3aed'); const [routineId,setRoutineId]=useState<number|undefined>(routines[0]?.id);
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [subtypeId,setSubtypeId]=useState<number|undefined>(); const [setsN,setSetsN]=useState(4); const [reps,setReps]=useState('8-12'); const [rest,setRest]=useState(90);
+  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
+  const [newMachineName,setNewMachineName]=useState(''); const [newMachineUnit,setNewMachineUnit]=useState<Unit>('kg');
+
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
+  async function createExerciseAndSelect(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
+  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,settings:[],createdAt:now()}); setSubtypeId(id); setNewMachineName(''); refresh(); }
   async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
   const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
-  return <section><Card><h3>Create Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button></Card>
-  <Card><h3>Edit Routine</h3><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3">
-        <button className="secondary mini" onClick={async()=>{ 
-          const r = routines.find((x:Routine)=>x.id===routineId);
-          if(!r || !routineId) return;
-          const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()});
-          const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
-          for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()});
-          setRoutineId(newId);
-          refresh();
-        }}>Duplicate</button>
-        <button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button>
-        <button className="danger mini" onClick={delRoutine}>Delete</button>
-      </div></>}<select value={exerciseId??''} onChange={e=>{setExerciseId(Number(e.target.value));setSubtypeId(undefined)}}><option value="">Choose exercise</option>{exercises.map((e:Exercise)=><option key={e.id} value={e.id}>{e.name}</option>)}</select><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><div className="grid3"><label>Sets<input type="number" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
-  {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack">
-          <button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:Math.max(1,it.order-1)}); refresh();}}>↑</button>
-          <button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:it.order+1}); refresh();}}>↓</button>
-          <button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button>
-        </div></div><p className="muted">{st?.name||'No subtype selected'}</p><Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}</section>
+  return <section>
+    <Card cls="builderHero"><span className="eyebrow">Routine Builder</span><h2>Build while you create</h2><p className="muted">Create a routine, create exercises, add machines and add them to the workout template from one place.</p></Card>
+    <div className="builderSplit">
+      <Card cls="builderCard"><h3>1. Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3"><button className="secondary mini" onClick={async()=>{ const r = routines.find((x:Routine)=>x.id===routineId); if(!r || !routineId) return; const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()}); const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order); for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()}); setRoutineId(newId); refresh(); }}>Duplicate</button><button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button><button className="danger mini" onClick={delRoutine}>Delete</button></div></>}</Card>
+      <Card cls="builderCard"><h3>2. Exercise</h3><ExerciseSearchSelect exercises={exercises} value={exerciseId} onChange={(id)=>{setExerciseId(id);setSubtypeId(undefined)}} placeholder="Search exercise..."/><details className="inlineCreate"><summary>Create new exercise here</summary><div className="builderGrid"><input placeholder="New exercise name" value={newExName} onChange={e=>setNewExName(e.target.value)}/><select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={newExEquip} onChange={e=>setNewExEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div><SecondaryMusclePicker primary={newExMuscle} value={newExSecondary} onChange={setNewExSecondary}/><button className="secondary" onClick={createExerciseAndSelect}>Create and select</button></details></Card>
+      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
+    </div>
+    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack"><button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:Math.max(1,it.order-1)}); refresh();}}>↑</button><button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:it.order+1}); refresh();}}>↓</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
+  </section>
 }
-
 
 function mondayOfWeek(d: Date) {
   const out = new Date(d);
@@ -1001,13 +1964,23 @@ function nutritionScoreV19(day: DailyNutritionLog) {
   const protein = day.proteinServings ?? day.meals.filter(m=>m.proteinIncluded).length;
   const target = day.proteinTarget ?? 3;
   let score = 0;
-  score += day.waterMl >= 2000 ? 22 : Math.round((day.waterMl/2000)*22);
-  score += day.creatineTaken ? 18 : 0;
-  score += day.caffeineMg <= 400 ? 12 : 4;
-  score += day.meals.length >= 3 ? 18 : day.meals.length * 6;
-  score += protein >= target ? 20 : Math.round((protein/Math.max(1,target))*20);
-  score += Math.min(10, day.meals.filter(m=>m.quality==='Great').length*4);
+  if (day.waterMl >= 2000) score += 25;
+  if (day.creatineTaken) score += 20;
+  if (protein >= target) score += 25;
+  if (day.meals.length >= 3) score += 20;
+  if ((day.reflection || '').trim().length > 0) score += 10;
   return Math.min(100, score);
+}
+function nutritionHabitsV20(day: DailyNutritionLog) {
+  const protein = day.proteinServings ?? day.meals.filter(m=>m.proteinIncluded).length;
+  const target = day.proteinTarget ?? 3;
+  return [
+    {key:'water', label:'Water', done: day.waterMl >= 2000, detail:`${day.waterMl}/2000 ml`},
+    {key:'creatine', label:'Creatine', done: day.creatineTaken, detail: day.creatineTaken ? 'Taken' : 'Pending'},
+    {key:'protein', label:'Protein', done: protein >= target, detail:`${protein}/${target}`},
+    {key:'meals', label:'Meals', done: day.meals.length >= 3, detail:`${day.meals.length}/3`},
+    {key:'reflection', label:'Reflect', done: (day.reflection || '').trim().length > 0, detail: (day.reflection || '').trim() ? 'Done' : 'Pending'}
+  ];
 }
 function normaliseNutritionDay(day: DailyNutritionLog): DailyNutritionLog {
   return {
@@ -1042,12 +2015,14 @@ function NutritionPage(){
   }
 
   const score=nutritionScoreV19(day);
+  const habits=nutritionHabitsV20(day);
+  const completedHabits=habits.filter(h=>h.done).length;
   const protein = day.proteinServings || 0;
   const proteinTarget = day.proteinTarget || 3;
   const qualityCounts={great:day.meals.filter(m=>m.quality==='Great').length, okay:day.meals.filter(m=>m.quality==='Okay').length, off:day.meals.filter(m=>m.quality==='Off-track').length};
   const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
   const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
-  const nextSuggestion=score>=85?'Strong day. Repeat the basics tomorrow.':day.waterMl<1500?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':'Write a quick reflection.';
+  const nextSuggestion=score>=90?'Strong day. Repeat the basics tomorrow.':day.waterMl<2000?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':!(day.reflection||'').trim()?'Write a quick reflection.':'You are on track.';
   function exportBackup(){downloadNutritionJson(logs, `LiftLog_Nutrition_Backup_${nutritionToday()}.json`);}
   async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
 
@@ -1055,11 +2030,22 @@ function NutritionPage(){
     <Card cls="hero nutritionHeroPro">
       <div className="nutritionHeroGrid">
         <div><div className="eyebrow lightText">NUTRITION ACCOUNTABILITY</div><h2>Fuel Dashboard</h2><p>Track water, creatine, caffeine, protein and meals without calorie obsession.</p></div>
-        <div className="nutritionOrb"><span>{score}%</span><em>Today</em></div>
+        <div className="nutritionOrb"><span>{completedHabits}/5</span><em>Habits</em></div>
       </div>
     </Card>
 
     <Card cls="nutritionCommandCard"><div><span>Today's focus</span><strong>{nextSuggestion}</strong></div><input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/></Card>
+    <Card cls="habitChecklistCard">
+      <div className="sectionHeader">
+        <div><h3>Daily Habits</h3><p className="muted">{score}% complete · starts from 0 each day</p></div>
+      </div>
+      <div className="habitChecklist">
+        {habits.map(h=><div className={h.done?'habitPill done':'habitPill'} key={h.key}>
+          <strong>{h.done?'✓':'○'} {h.label}</strong>
+          <span>{h.detail}</span>
+        </div>)}
+      </div>
+    </Card>
 
     <div className="nutritionProGrid">
       <Card cls="nutritionMetric hydration"><div className="metricIcon">💧</div><span>Hydration</span><strong>{day.waterMl} ml</strong><p>{Math.round(Math.min(100,(day.waterMl/2500)*100))}% of 2.5L target</p><div className="button-row"><button onClick={()=>addWater(250)}>+250</button><button onClick={()=>addWater(500)}>+500</button><button onClick={()=>addWater(-250)}>-250</button></div><div className="progress-track"><div style={{width:`${Math.min(100,(day.waterMl/2500)*100)}%`}} /></div></Card>
@@ -1067,6 +2053,13 @@ function NutritionPage(){
       <Card cls="nutritionMetric caffeine"><div className="metricIcon">☕</div><span>Caffeine</span><strong>{day.caffeineMg} mg</strong><p>{day.caffeineLastAt?`Last logged ${day.caffeineLastAt}`:'Soft limit: 400 mg/day'}</p><div className="button-row"><button onClick={()=>addCaffeine(80)}>+80</button><button onClick={()=>addCaffeine(150)}>+150</button><button onClick={()=>addCaffeine(200)}>+200</button><button onClick={()=>addCaffeine(-80)}>-80</button></div>{day.caffeineMg>400&&<p className="warningText">High caffeine day. Consider stopping here.</p>}</Card>
       <Card cls="nutritionMetric protein"><div className="metricIcon">🥩</div><span>Protein servings</span><strong>{protein}/{proteinTarget}</strong><p>Simple serving target, not macro tracking.</p><div className="button-row"><button onClick={()=>addProtein(1)}>+1</button><button onClick={()=>addProtein(-1)}>-1</button><button onClick={()=>updateDay({...day,proteinTarget:proteinTarget+1})}>Target +</button><button onClick={()=>updateDay({...day,proteinTarget:Math.max(1,proteinTarget-1)})}>Target -</button></div></Card>
     </div>
+
+    <Card cls="nutritionQuickAdd">
+      <button onClick={()=>addWater(500)}>💧 +500 ml</button>
+      <button onClick={toggleCreatine}>{day.creatineTaken?'⚡ Taken':'⚡ Creatine'}</button>
+      <button onClick={()=>addProtein(1)}>🥩 Protein</button>
+      <button onClick={()=>addCaffeine(80)}>☕ +80 mg</button>
+    </Card>
 
     <Card cls="mealPanelPro">
       <div className="sectionHeader"><div><h3>Meal Accountability</h3><p className="muted">Log enough to stay honest, not enough to obsess.</p></div><div className="qualityPills"><span className="good">{qualityCounts.great} great</span><span>{qualityCounts.okay} okay</span><span className="bad">{qualityCounts.off} off-track</span></div></div>
