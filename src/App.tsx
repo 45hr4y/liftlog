@@ -1106,14 +1106,14 @@ export default function App() {
       <button className="iconBtn" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'}); refresh();}}>{settings.theme==='light'?<Moon/>:<Sun/>}</button>
     </header>
     <main>
-      {page==='home' && <HomePage data={{exercises,subtypes,routines,workouts,sets,plannedWorkouts,setPage}} />}
+      {page==='home' && <HomePage data={{exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts,setPage}} />}
       {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,routines,routineExercises,refresh,setPage,setSelectedExerciseId}} />}
       {page==='exerciseDetail' && <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} />}
       {page==='subtypes' && <SubtypesPage data={{exercises,subtypes,refresh}} />}
       {page==='routines' && <RoutinesPage data={{exercises,subtypes,routines,routineExercises,refresh}} />}
       {page==='log' && <LogPage data={{settings,exercises,subtypes,routines,routineExercises,workouts,sets,replacements,activeWorkout,setActiveWorkoutId,refresh}} />}
       {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage}} />}
-      {page==='history' && <HistoryPage data={{exercises,subtypes,routines,workouts,sets,replacements}} />}
+      {page==='history' && <HistoryPage data={{exercises,subtypes,routines,workouts,sets,replacements,refresh}} />}
       {page==='nutrition' && <NutritionPage />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
@@ -1410,7 +1410,7 @@ function detectSetPR(newSet: WorkoutSet, allSets: WorkoutSet[]) {
 }
 
 function HomePage({data}:any){
-  const {exercises,subtypes,routines,workouts,sets,setPage}=data;
+  const {exercises,subtypes,routines,routineExercises,workouts,sets,setPage}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
   const weekSets = sets.filter((s:WorkoutSet)=>weekWorkouts.some((w:Workout)=>w.id===s.workoutId));
   const vol = weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
@@ -1419,6 +1419,8 @@ function HomePage({data}:any){
   const groups = groupVolumesForWeek(exercises, workouts, sets);
   const maxGroup = Math.max(...Object.values(groups), 1);
   const prs = recentPRItems(exercises, sets);
+  const recommended = recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets);
+  const recoveryMuscles = ['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'];
 
   return <section className="homeV12">
     <Card cls="hero heroV12">
@@ -1462,20 +1464,32 @@ function HomePage({data}:any){
       </Card>
     </div>
 
-    <Card cls="premiumCard">
+    <Card cls="premiumCard recoveryV30">
       <div className="sectionHeader">
-        <h3>Muscle Recovery</h3>
+        <div><h3>Recovery Status</h3><p className="muted">Based on when each muscle was last trained and recent volume.</p></div>
         <button className="textBtn" onClick={()=>setPage('stats')}>Details</button>
       </div>
-      <div className="recoveryGrid">
-        {Object.entries(groups).map(([group, volume])=>{
-          const rec = recoveryLabel(volume);
-          return <div className={`recoveryTile ${rec.cls}`} key={group}>
-            <div className="recoveryTop"><strong>{group}</strong><span>{rec.label}</span></div>
-            <div className="recoveryBar"><b style={{width:`${Math.min(100,(volume/maxGroup)*100)}%`}} /></div>
-            <em>{fmtVol(volume)}</em>
+      {recommended&&<div className="recommendedTrain">
+        <span>Recommended today</span>
+        <strong>{recommended.routine.name}</strong>
+        <em>{recommended.score}% average readiness</em>
+      </div>}
+      <div className="recoveryStatusGrid">
+        {recoveryMuscles.map(m=>{
+          const rec = recoveryForMuscleFromHistory(m,exercises,workouts,sets);
+          return <div className={`recoveryStatusCard ${recoveryClassFromScore(rec.score)}`} key={m}>
+            <div><strong>{m.replace('Quadriceps','Quads').replace('Front Delt','Front delts').replace('Side Delt','Side delts').replace('Rear Delt','Rear delts')}</strong><span>{rec.label}</span></div>
+            <b>{Math.round(rec.score)}%</b>
+            <div className="miniRecoveryBar"><i style={{width:`${Math.round(rec.score)}%`}} /></div>
+            <em>{rec.last} · {rec.sets} recent sets</em>
           </div>
         })}
+      </div>
+      <div className="recoveryLegendV30">
+        <span><i className="recDot recRed"></i>0–25% Recovering</span>
+        <span><i className="recDot recOrange"></i>26–50% Fatigued</span>
+        <span><i className="recDot recYellow"></i>51–75% Almost ready</span>
+        <span><i className="recDot recGreen"></i>76–100% Ready</span>
       </div>
     </Card>
 
@@ -1734,15 +1748,31 @@ function suggestedReplacementsFor(ex:Exercise, exercises:Exercise[]) {
 function recoveryForMuscleFromHistory(muscle:string, exercises:Exercise[], workouts:Workout[], sets:WorkoutSet[]) {
   const ids = exercises.filter(e=>e.muscle===muscle || (e.secondaryMuscles||[]).includes(muscle)).map(e=>e.id);
   const relevant = sets.filter(s=>ids.includes(s.exerciseId));
-  if(!relevant.length) return {score:100,label:'Recovered',days:999,volume:0,sets:0};
+  if(!relevant.length) return {score:100,label:'Ready',days:999,volume:0,sets:0,last:'Never'};
   const latest = [...relevant].sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
   const days = Math.max(0,(Date.now()-new Date(latest.createdAt).getTime())/86400000);
   const recent = relevant.filter(s=>Date.now()-new Date(s.createdAt).getTime()<4*86400000);
   const volume = recent.reduce((a,s)=>a+volumeKg(s),0);
   const fatiguePenalty = Math.min(35, volume/350);
   const score = Math.max(0, Math.min(100, days*28 + 30 - fatiguePenalty));
-  const label = score<35?'Recovering':score<60?'Fatigued':score<80?'Almost ready':'Ready';
-  return {score,label,days,volume,sets:recent.length};
+  const label = score<26?'Recovering':score<51?'Fatigued':score<76?'Almost ready':'Ready';
+  const last = days>30?'30+ days ago':days>=1?`${Math.floor(days)} day${Math.floor(days)===1?'':'s'} ago`:'Today';
+  return {score,label,days,volume,sets:recent.length,last};
+}
+function recoveryClassFromScore(score:number){
+  return score<26?'recRed':score<51?'recOrange':score<76?'recYellow':'recGreen';
+}
+function recommendedTrainingFromRecovery(exercises:Exercise[], routines:Routine[], routineExercises:RoutineExercise[], workouts:Workout[], sets:WorkoutSet[]){
+  const routineScores = routines.filter(r=>!r.archived).map(r=>{
+    const items = routineExercises.filter(i=>i.routineId===r.id);
+    const scores = items.map(i=>{
+      const ex=exercises.find(e=>e.id===i.exerciseId);
+      return ex ? recoveryForMuscleFromHistory(ex.muscle,exercises,workouts,sets).score : 100;
+    });
+    const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 100;
+    return {routine:r,score:avg};
+  }).sort((a,b)=>b.score-a.score);
+  return routineScores[0];
 }
 
 function LogPage({data}:any){
@@ -1830,9 +1860,19 @@ function LogPage({data}:any){
   const routineItems=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
   const items=customMode || !activeWorkout.routineId ? customItems : routineItems;
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
+  const completedSets = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).length;
+  const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
+  const progressPct = Math.min(100, Math.round((completedSets/targetSets)*100));
+  const completedExerciseIds = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>s.exerciseId));
+  const completedExercises = items.filter((it:RoutineExercise)=>completedExerciseIds.has(it.exerciseId)).length;
 
   return <section className="workoutV15">
-    <Card cls="workoutHeaderSticky"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div></Card>
+    <Card cls="workoutHeaderSticky mobileWorkoutHeader"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div>
+      <div className="routineProgress">
+        <div className="progressMeta"><span>{completedSets}/{targetSets} sets</span><span>{completedExercises}/{items.length} exercises</span><strong>{progressPct}%</strong></div>
+        <div className="routineProgressBar"><b style={{width:`${progressPct}%`}} /></div>
+      </div>
+    </Card>
     <div className="floatingTimer smartTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Reset</button><button onClick={()=>setTimer((timer||Date.now())-15000)}>+15</button></div>
     <Card cls="addExercisePanel workoutVariantCreator">
       <h3>Add exercise or variant</h3>
@@ -1866,12 +1906,30 @@ function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Wor
   return [];
 }
 function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave}:any){
-  const [swapOpen,setSwapOpen]=useState(false); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
+  const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
   const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState('');
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
   const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
 
+  function targetForSet(n:number){
+    const p=prev.find((x:WorkoutSet)=>x.setNumber===n);
+    if(!p) return undefined;
+    const converted = Math.round(convert(p.weight,p.unit,unit)*10)/10;
+    return {weight:converted,reps:p.reps,rir:p.rir};
+  }
+  function quickWeightOptions(n:number){
+    const t=targetForSet(n);
+    if(!t) return [];
+    const inc = unit==='kg'?2.5:5;
+    return [t.weight, t.weight+inc, t.weight+inc*2, Math.max(0,t.weight-inc)].filter((v,i,a)=>a.indexOf(v)===i);
+  }
+  function fillSet(n:number,w:number,r?:number){
+    const wi=document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement|null;
+    const ri=document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement|null;
+    if(wi) wi.value=String(w);
+    if(ri && r) ri.value=String(r);
+  }
   async function applySwap(newExerciseId:number){
     if(!workout?.id || !item?.id || !originalEx?.id) return;
     const existing = replacement;
@@ -1894,7 +1952,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
     onSave(); refresh();
   }
   return <Card cls="loggerV15">
-    <details open>
+    <details open className={todaySets.length>=item.sets?"exerciseCompleteDetails":""}>
       <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{replacement?`Replaces ${originalEx?.name} today`:(subtype?.name||'No subtype selected')}</p></div></div></summary>
       <div className="swapPanel">
         <button className="secondary mini" onClick={()=>setSwapOpen(!swapOpen)}>Replace Exercise Today</button>
@@ -1906,6 +1964,11 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
       <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>
       <div className="rirExplainer"><strong>RIR</strong> = reps in reserve. Example: RIR 2 means you could have done about 2 more reps.</div>
       {prMessage && <div className="prToastInline">{prMessage}</div>}
+      {activeInput&&<div className="keyboardAssistPanel">
+        <div><strong>{ex.name}</strong><span>Set {activeInput.set} · editing {activeInput.field}</span></div>
+        {targetForSet(activeInput.set)&&<p>Previous: {targetForSet(activeInput.set)?.weight}{unit} × {targetForSet(activeInput.set)?.reps}</p>}
+        <div className="quickWeightRow">{quickWeightOptions(activeInput.set).map((w:number)=><button key={w} onClick={()=>fillSet(activeInput.set,w,targetForSet(activeInput.set)?.reps)}>{w}{unit}</button>)}</div>
+      </div>}
       <div className="setTableV15">
         <div className="setHeaderV15"><span>Set</span><span>Previous</span><span>Weight</span><span>Reps</span><span>RIR</span><span></span></div>
         {Array.from({length:item.sets+extra}).map((_,i)=>{
@@ -1913,9 +1976,9 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
           const pw=p?Math.round(convert(p.weight,p.unit,unit)*10)/10:undefined;
           return <div className={saved?'setLineV15 completedSet':'setLineV15'} key={n}>
             <strong>{n}</strong><small>{p?`${pw}${unit} × ${p.reps}`:'—'}</small>
-            <input id={`w-${item.id}-${n}`} defaultValue={saved?String(saved.weight):(pw?String(pw):'')} placeholder={unit} type="number" inputMode="decimal" step=".5"/>
-            <input id={`r-${item.id}-${n}`} defaultValue={saved?String(saved.reps):(p?String(p.reps):'')} placeholder="reps" type="number" inputMode="numeric"/>
-            <input id={`rir-${item.id}-${n}`} defaultValue={saved?.rir!==undefined?String(saved.rir):''} placeholder="RIR" type="number" inputMode="decimal" step=".5"/>
+            <input id={`w-${item.id}-${n}`} onFocus={()=>setActiveInput({set:n,field:'weight'})} defaultValue={saved?String(saved.weight):(pw?String(pw):'')} placeholder={unit} type="number" inputMode="decimal" enterKeyHint="next" step=".5"/>
+            <input id={`r-${item.id}-${n}`} onFocus={()=>setActiveInput({set:n,field:'reps'})} defaultValue={saved?String(saved.reps):(p?String(p.reps):'')} placeholder="reps" type="number" inputMode="numeric" enterKeyHint="next"/>
+            <input id={`rir-${item.id}-${n}`} onFocus={()=>setActiveInput({set:n,field:'rir'})} defaultValue={saved?.rir!==undefined?String(saved.rir):''} placeholder="RIR" type="number" inputMode="decimal" enterKeyHint="done" step=".5"/>
             <button onClick={()=>save(n)}>{saved?'✓':'Save'}</button>
           </div>
         })}
@@ -2467,20 +2530,55 @@ function BackupPage({data}:any){
 
 
 function HistoryPage({data}:any){
-  const {exercises,routines,workouts,sets,replacements}=data;
+  const {exercises,routines,workouts,sets,replacements,refresh}=data;
   const [selectedId,setSelectedId]=useState<number|undefined>();
-  const nutritionLogs:Record<string,DailyNutritionLog> = loadNutritionLogs();
+  const [nutritionLogs,setNutritionLogs]=useState<Record<string,DailyNutritionLog>>(()=>loadNutritionLogs());
   const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
   const selected = completed.find((w:Workout)=>w.id===selectedId);
+
+  async function deleteSet(id:number|undefined){
+    if(!id || !confirm('Delete this set?')) return;
+    await db.sets.delete(id);
+    refresh();
+  }
+  async function deleteWorkout(w:Workout){
+    if(!w.id || !confirm('Delete this workout and all its sets?')) return;
+    const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id);
+    for(const s of ss) if(s.id) await db.sets.delete(s.id);
+    const reps=(replacements||[]).filter((r:WorkoutReplacement)=>r.workoutId===w.id);
+    for(const r of reps) if(r.id) await db.replacements.delete(r.id);
+    await db.workouts.delete(w.id);
+    setSelectedId(undefined);
+    refresh();
+  }
+  function deleteNutritionDay(day:string){
+    if(!confirm('Delete this nutrition day?')) return;
+    const updated={...nutritionLogs};
+    delete updated[day];
+    setNutritionLogs(updated);
+    saveNutritionLogs(updated);
+  }
+  function deleteMeal(day:string, mealId:string){
+    if(!confirm('Delete this meal entry?')) return;
+    const entry=nutritionLogs[day];
+    if(!entry) return;
+    const updatedEntry={...entry, meals:entry.meals.filter(m=>m.id!==mealId)};
+    const updated={...nutritionLogs,[day]:updatedEntry};
+    setNutritionLogs(updated);
+    saveNutritionLogs(updated);
+  }
 
   if(selected){
     const ss = workoutSetsFor(selected, sets);
     const grouped = exercises.map((ex:Exercise)=>({ex, rows:ss.filter((s:WorkoutSet)=>s.exerciseId===ex.id)})).filter((x:any)=>x.rows.length);
     return <section>
-      <Card cls="premiumCard"><button className="secondary mini" onClick={()=>setSelectedId(undefined)}>← Back to history</button><h2>{selected.title}</h2><p className="muted">{selected.date} · {durationMinutes(selected)} min · {ss.length} sets · {fmtVol(workoutVolume(selected,sets))}</p></Card>
+      <Card cls="premiumCard">
+        <button className="secondary mini" onClick={()=>setSelectedId(undefined)}>← Back to history</button>
+        <div className="row"><div><h2>{selected.title}</h2><p className="muted">{selected.date} · {durationMinutes(selected)} min · {ss.length} sets · {fmtVol(workoutVolume(selected,sets))}</p></div><button className="danger mini" onClick={()=>deleteWorkout(selected)}>Delete workout</button></div>
+      </Card>
       {grouped.map((g:any)=><Card key={g.ex.id} cls="historyExercise">
         <h3>{g.ex.name}</h3>{replacements?.some((r:WorkoutReplacement)=>r.workoutId===selected.id&&r.replacementExerciseId===g.ex.id)&&<p className="muted">Used as a replacement in this workout.</p>}
-        {g.rows.sort((a:WorkoutSet,b:WorkoutSet)=>a.setNumber-b.setNumber).map((s:WorkoutSet)=><div className="historySet" key={s.id}><span>Set {s.setNumber}</span><strong>{s.weight}{s.unit} × {s.reps}</strong><em>{fmtVol(volumeKg(s))}</em></div>)}
+        {g.rows.sort((a:WorkoutSet,b:WorkoutSet)=>a.setNumber-b.setNumber).map((s:WorkoutSet)=><div className="historySet editableHistorySet" key={s.id}><span>Set {s.setNumber}</span><strong>{s.weight}{s.unit} × {s.reps}</strong><em>{fmtVol(volumeKg(s))}</em><button onClick={()=>deleteSet(s.id)}>Delete</button></div>)}
       </Card>)}
     </section>
   }
@@ -2491,7 +2589,7 @@ function HistoryPage({data}:any){
   const meals7 = Object.entries(nutritionLogs).filter(([d])=>new Date(d)>=new Date(Date.now()-7*86400000)).reduce((a,[,n])=>a+(n.meals?.length||0),0);
 
   return <section>
-    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place.</p></Card>
+    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
     <div className="historySummaryGrid">
       <Card><span className="eyebrow">7-day volume</span><h3>{fmtVol(totalVol7)}</h3></Card>
       <Card><span className="eyebrow">Workouts</span><h3>{completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).length}</h3></Card>
@@ -2502,11 +2600,10 @@ function HistoryPage({data}:any){
       const dayWorkouts=completed.filter((w:Workout)=>w.date===day);
       const n=nutritionLogs[day] ? normaliseNutritionDay(nutritionLogs[day]) : undefined;
       return <Card key={day} cls="combinedDayCard">
-        <h3>{new Date(day).toLocaleDateString([], {weekday:'long', day:'numeric', month:'short'})}</h3>
-        {dayWorkouts.map((w:Workout)=>{ const routine=routines.find((r:Routine)=>r.id===w.routineId); const ss=workoutSetsFor(w,sets); return <button className="combinedWorkoutRow detailed" key={w.id} onClick={()=>setSelectedId(w.id)}><span style={{background:routine?.color||'#2563eb'}}/><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(workoutVolume(w,sets))} · {durationMinutes(w)} min · Top: {ss.length?exercises.find((e:Exercise)=>e.id===ss[0].exerciseId)?.name:'—'}</em></button> })}
-        {n ? <div className="combinedNutritionRow"><strong>Nutrition · {nutritionScoreV19(n)}%</strong><span>Water {n.waterMl}ml · Meals {n.meals.length} · Protein {(n.proteinServings??0)}/{n.proteinTarget??3} · Caffeine {n.caffeineMg}mg · {n.creatineTaken?'Creatine ✓':'Creatine ○'}</span>{n.reflection&&<em>{n.reflection.slice(0,90)}</em>}</div> : <p className="muted">No nutrition logged.</p>}
+        <div className="row"><h3>{new Date(day).toLocaleDateString([], {weekday:'long', day:'numeric', month:'short'})}</h3>{n&&<button className="danger mini" onClick={()=>deleteNutritionDay(day)}>Delete nutrition</button>}</div>
+        {dayWorkouts.map((w:Workout)=>{ const routine=routines.find((r:Routine)=>r.id===w.routineId); const ss=workoutSetsFor(w,sets); return <div className="combinedWorkoutRowWrap" key={w.id}><button className="combinedWorkoutRow detailed" onClick={()=>setSelectedId(w.id)}><span style={{background:routine?.color||'#2563eb'}}/><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(workoutVolume(w,sets))} · {durationMinutes(w)} min · Top: {ss.length?exercises.find((e:Exercise)=>e.id===ss[0].exerciseId)?.name:'—'}</em></button><button className="danger mini" onClick={()=>deleteWorkout(w)}>Delete</button></div> })}
+        {n ? <div className="combinedNutritionRow"><strong>Nutrition · {nutritionScoreV19(n)}%</strong><span>Water {n.waterMl}ml · Meals {n.meals.length} · Protein {(n.proteinServings??0)}/{n.proteinTarget??3} · Caffeine {n.caffeineMg}mg · {n.creatineTaken?'Creatine ✓':'Creatine ○'}</span>{n.reflection&&<em>{n.reflection.slice(0,90)}</em>}<div className="mealDeleteList">{n.meals.slice(0,4).map(m=><button key={m.id} onClick={()=>deleteMeal(day,m.id)}>Delete {m.type}: {m.title.slice(0,18)}</button>)}</div></div> : <p className="muted">No nutrition logged.</p>}
       </Card>
     }) : <Card><p className="muted">No history yet.</p></Card>}
   </section>
 }
-

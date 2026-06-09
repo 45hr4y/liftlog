@@ -283,3 +283,21 @@ Added:
 - Newly created variants are immediately added to the current workout.
 - Added Rest days to calendar/planner.
 - Added numeric input hints for iPhone keypad behaviour.
+
+
+## v29 Mobile Workout Flow
+
+Added:
+- Routine progress bar during workout.
+- Completed sets / target sets progress.
+- Exercise count progress.
+- Sticky keyboard assist panel while editing weight/reps/RIR.
+- Previous set context remains visible above the iPhone keypad.
+- Quick weight suggestion chips based on previous set.
+- Better mobile spacing while the keypad is open.
+
+## v30 Recovery + Editable History
+- Added recovery-specific legend.
+- Recovery cards now show status, score, recent sets and last trained.
+- Added recommended training suggestion based on routine readiness.
+- Added delete controls for workouts, individual sets, nutrition days and meal entries.

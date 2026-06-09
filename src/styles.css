@@ -1380,3 +1380,124 @@ body[data-theme="dark"] .restEventV28{
     font-size:16px;
   }
 }
+
+
+/* LiftLog v29 Mobile Workout Flow */
+.mobileWorkoutHeader{
+  position:sticky;
+  top:0;
+  z-index:22;
+}
+.routineProgress{
+  margin-top:12px;
+}
+.progressMeta{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  align-items:center;
+  font-size:12px;
+  color:#64748b;
+  font-weight:900;
+}
+.progressMeta strong{
+  color:#2563eb;
+}
+.routineProgressBar{
+  height:10px;
+  background:#e2e8f0;
+  border-radius:999px;
+  overflow:hidden;
+  margin-top:8px;
+}
+.routineProgressBar b{
+  display:block;
+  height:100%;
+  background:linear-gradient(90deg,#2563eb,#10b981);
+  border-radius:999px;
+}
+.keyboardAssistPanel{
+  position:sticky;
+  top:96px;
+  z-index:20;
+  margin:10px 0;
+  padding:12px;
+  border:1px solid #bfdbfe;
+  border-radius:18px;
+  background:rgba(239,246,255,.94);
+  backdrop-filter:blur(14px);
+  box-shadow:0 12px 30px rgba(15,23,42,.12);
+}
+.keyboardAssistPanel div:first-child{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+}
+.keyboardAssistPanel strong{
+  font-size:15px;
+}
+.keyboardAssistPanel span,
+.keyboardAssistPanel p{
+  color:#64748b;
+  font-size:12px;
+  margin:4px 0;
+  font-weight:800;
+}
+.quickWeightRow{
+  display:flex;
+  gap:7px;
+  overflow-x:auto;
+  padding-top:5px;
+}
+.quickWeightRow button{
+  white-space:nowrap;
+  border-radius:999px;
+  padding:8px 10px;
+  background:#dbeafe;
+  color:#1d4ed8;
+  font-weight:950;
+}
+.exerciseCompleteDetails > summary{
+  opacity:.78;
+}
+body[data-theme="dark"] .keyboardAssistPanel{
+  background:rgba(15,23,42,.94);
+  border-color:#1d4ed8;
+}
+body[data-theme="dark"] .quickWeightRow button{
+  background:#1e3a8a;
+  color:#bfdbfe;
+}
+@media(max-width:720px){
+  .workoutV15{
+    padding-bottom:45vh;
+  }
+  .keyboardAssistPanel{
+    top:84px;
+  }
+  .setLineV15 input{
+    min-width:72px;
+    font-size:18px;
+  }
+}
+
+/* LiftLog v30 Recovery + Editable History */
+.recoveryV30 .sectionHeader{align-items:flex-start}
+.recommendedTrain{border-radius:20px;padding:14px;margin:12px 0;background:linear-gradient(135deg,#dcfce7,#dbeafe);display:grid;gap:3px}
+.recommendedTrain span{font-size:12px;font-weight:950;color:#64748b;text-transform:uppercase;letter-spacing:.08em}
+.recommendedTrain strong{font-size:22px}
+.recommendedTrain em{font-style:normal;color:#475569;font-size:13px}
+.recoveryStatusGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.recoveryStatusCard{border:1px solid #e2e8f0;border-radius:18px;padding:12px;display:grid;gap:8px;background:#fff}
+.recoveryStatusCard>div:first-child{display:flex;justify-content:space-between;gap:8px}
+.recoveryStatusCard strong{font-size:14px}.recoveryStatusCard span{font-size:12px;font-weight:950}.recoveryStatusCard>b{font-size:18px}
+.miniRecoveryBar{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden}.miniRecoveryBar i{display:block;height:100%;border-radius:999px}
+.recRed .miniRecoveryBar i,.recDot.recRed{background:#ef4444}.recOrange .miniRecoveryBar i,.recDot.recOrange{background:#fb923c}.recYellow .miniRecoveryBar i,.recDot.recYellow{background:#facc15}.recGreen .miniRecoveryBar i,.recDot.recGreen{background:#22c55e}
+.recRed span,.recRed>b{color:#dc2626}.recOrange span,.recOrange>b{color:#ea580c}.recYellow span,.recYellow>b{color:#ca8a04}.recGreen span,.recGreen>b{color:#16a34a}
+.recoveryStatusCard em{font-style:normal;color:#64748b;font-size:12px}
+.recoveryLegendV30{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;color:#64748b;font-size:12px;font-weight:800}.recDot{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:5px;vertical-align:-2px}
+.combinedWorkoutRowWrap{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.editableHistorySet{grid-template-columns:1fr 1fr 1fr auto}.editableHistorySet button,.mealDeleteList button{border-radius:999px;padding:6px 9px;font-size:12px;background:#fee2e2;color:#991b1b;font-weight:900}
+.mealDeleteList{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.danger{background:#fee2e2!important;color:#991b1b!important}
+body[data-theme="dark"] .recoveryStatusCard{background:#020617;border-color:#1e293b}body[data-theme="dark"] .recommendedTrain{background:linear-gradient(135deg,#064e3b,#1e3a8a)}
+@media(max-width:720px){.recoveryStatusGrid{grid-template-columns:1fr}.combinedWorkoutRowWrap{grid-template-columns:1fr}.editableHistorySet{grid-template-columns:1fr 1fr}.editableHistorySet button{width:max-content}}
