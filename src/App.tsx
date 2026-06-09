@@ -1,4 +1,6 @@
 
+function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
+
 import { useEffect, useMemo, useState } from 'react';
 import Dexie, { Table } from 'dexie';
 import {Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2, Apple, Star} from 'lucide-react';
@@ -12,7 +14,7 @@ type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
 type BackupSnapshot = { id?: number; name: string; reason: string; createdAt: string; payload: any };
 type Exercise = { id?: number; name: string; muscle: string; secondaryMuscles?: string[]; equipment: string; notes?: string; favourite?: boolean; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
-type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
+type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; tags?: string[]; createdAt: string };
 type Routine = { id?: number; name: string; color: string; archived?: boolean; createdAt: string };
 type RoutineExercise = { id?: number; routineId: number; exerciseId: number; subtypeId?: number; order: number; sets: number; reps: string; rest: number; createdAt: string };
 type Workout = { id?: number; routineId?: number; title: string; date: string; startedAt: string; endedAt?: string };
@@ -1122,6 +1124,7 @@ export default function App() {
       {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
     </main>
+    <div className="floatingFab"><button onClick={()=>setPage('log')}>＋</button><div><button onClick={()=>setPage('log')}>Start</button><button onClick={()=>setPage('routines')}>Routine</button><button onClick={()=>setPage('exercises')}>Exercise</button></div></div>
     <nav className="tabs fiveTabs premiumTabs">
       <Tab p="home" page={page} setPage={setPage} icon={<Home/>} label="Home"/>
       <Tab p="calendar" page={page} setPage={setPage} icon={<CalendarDays/>} label="Calendar"/>
@@ -1517,7 +1520,7 @@ function HomePage({data}:any){
         <span className="muted miniLabel">Volume intensity</span>
       </div>
       <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} exercises={exercises} workouts={workouts} sets={sets} />
-      <div className="heatLegend"><span className="heat0"></span>None <span className="heat1"></span>Light <span className="heat2"></span>Moderate <span className="heat3"></span>High <span className="heat4"></span>Very high</div>
+      
     </Card>
 
     <Card cls="premiumCard">
@@ -1688,13 +1691,14 @@ function ExerciseDetailPage({data}:any){
 
 function SubtypesPage({data}:any){
   const {exercises,subtypes,refresh}=data;
-  const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>();
+  const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>(); const [tagInput,setTagInput]=useState(''); const [tags,setTags]=useState<string[]>([]);
   const [settings,setSettings]=useState<MachineSetting[]>([]); const [label,setLabel]=useState(''); const [type,setType]=useState<SettingType>('dropdown'); const [opts,setOpts]=useState('1,2,3,4,5');
   const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
 
   function addSetting(){ if(!label.trim())return; setSettings([...settings,{id:crypto.randomUUID(),label:label.trim(),type,options:type==='dropdown'?opts.split(',').map(x=>x.trim()):undefined,defaultValue:type==='checkbox'?false:''}]); setLabel(''); }
+  function addTag(){ const t=tagInput.trim(); if(!t)return; setTags([...tags,t]); setTagInput(''); }
   async function createExerciseHere(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
-  async function add(){ if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); await db.subtypes.add({exerciseId,name:name.trim(),defaultUnit:unit,photo,settings,createdAt:now()}); setName(''); setPhoto(undefined); setSettings([]); setUnit('kg'); refresh(); }
+  async function add(){ if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); await db.subtypes.add({exerciseId,name:name.trim(),defaultUnit:unit,photo,settings,tags,createdAt:now()}); setName(''); setPhoto(undefined); setSettings([]); setTags([]); setUnit('kg'); refresh(); }
   async function del(s:Subtype){ if(!confirm('Delete this subtype? Past set logs remain.'))return; await db.subtypes.delete(s.id!); const rs=await db.routineExercises.where('subtypeId').equals(s.id!).toArray(); for(const r of rs) await db.routineExercises.update(r.id!,{subtypeId:undefined}); refresh(); }
   return <section>
     <Card cls="builderHero"><span className="eyebrow">Machine Builder</span><h2>Machines belong to exercises</h2><p className="muted">Search for an exercise, or create one here first, then save the exact machine/subtype with its own unit and settings.</p></Card>
@@ -1709,10 +1713,10 @@ function SubtypesPage({data}:any){
       <input placeholder="e.g. Prime Lateral Raise" value={name} onChange={e=>setName(e.target.value)}/>
       <label>Default unit for this exact machine</label><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
       <label className="upload"><ImagePlus/> Add one machine photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setPhoto(e.target.files?.[0])}/></label>{photo&&<img className="preview" src={blobUrl(photo)}/>}
-      <h4>Machine settings</h4><div className="builderGrid"><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}</div>
+      <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><h4>Machine settings</h4><div className="builderGrid"><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}</div>
       <button className="secondary" onClick={addSetting}>Add Setting</button><Pills>{settings.map(s=><span key={s.id}>{s.label} · {s.type}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
     </Card>
-    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{s.defaultUnit}</span>{s.settings.map(x=><span key={x.id}>{x.label}</span>)}</Pills></div></Card>})}
+    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}{s.settings.map(x=><span key={x.id}>{x.label}</span>)}</Pills></div></Card>})}
   </section>
 }
 
@@ -1800,11 +1804,14 @@ function LogPage({data}:any){
   const [,setTick]=useState(0);
   const [customMode,setCustomMode]=useState(false);
   const [customItems,setCustomItems]=useState<RoutineExercise[]>([]);
+  const [finishSummary,setFinishSummary]=useState<any>();
   const [addExerciseId,setAddExerciseId]=useState<number|undefined>();
   const [addSubtypeId,setAddSubtypeId]=useState<number|undefined>();
   const [newVariantName,setNewVariantName]=useState('');
   const [newVariantUnit,setNewVariantUnit]=useState<Unit>(settings.unit || 'kg');
   const [newVariantPhoto,setNewVariantPhoto]=useState<Blob|undefined>();
+  const [newVariantTag,setNewVariantTag]=useState('');
+  const [newVariantTags,setNewVariantTags]=useState<string[]>([]);
   const [quickRoutineName,setQuickRoutineName]=useState('');
 
   useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),1000);return()=>clearInterval(i)},[]);
@@ -1823,7 +1830,13 @@ function LogPage({data}:any){
   }
   async function finish(){ 
     if(!activeWorkout?.id)return; 
-    await db.workouts.update(activeWorkout.id,{endedAt:now()}); 
+    const endedAt=now();
+    await db.workouts.update(activeWorkout.id,{endedAt});
+    const workoutSets=sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id);
+    const muscles=Array.from(new Set(workoutSets.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter(Boolean)));
+    const volume=workoutSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
+    setFinishSummary({title:activeWorkout.title,volume,sets:workoutSets.length,duration:workoutDurationMinutes({...activeWorkout,endedAt}),muscles,impact:workoutSets.length>24?'High':workoutSets.length>12?'Moderate':'Light'});
+    haptic([40,40,80]); 
     if(customMode && customItems.length && confirm('Save this as a reusable routine?')){
       const name = prompt('Routine name?', activeWorkout.title || 'Custom Routine') || 'Custom Routine';
       const rid = await db.routines.add({name, color:'#2563eb', archived:false, createdAt:now()});
@@ -1848,7 +1861,7 @@ function LogPage({data}:any){
   async function createVariantAndAdd(){
     if(!addExerciseId) return alert('Choose exercise first');
     if(!newVariantName.trim()) return alert('Enter a variant or machine name');
-    const subtypeId = await db.subtypes.add({exerciseId:addExerciseId,name:newVariantName.trim(),defaultUnit:newVariantUnit,photo:newVariantPhoto,settings:[],createdAt:now()});
+    const subtypeId = await db.subtypes.add({exerciseId:addExerciseId,name:newVariantName.trim(),defaultUnit:newVariantUnit,photo:newVariantPhoto,settings:[],tags:newVariantTags,createdAt:now()});
     setAddSubtypeId(subtypeId);
     const nextOrder = customMode || !activeWorkout?.routineId 
       ? customItems.length+1 
@@ -1859,10 +1872,11 @@ function LogPage({data}:any){
     } else {
       setCustomItems([...customItems,item]);
     }
-    setNewVariantName(''); setNewVariantPhoto(undefined); setAddExerciseId(undefined); setAddSubtypeId(undefined);
+    setNewVariantName(''); setNewVariantPhoto(undefined); setNewVariantTag(''); setNewVariantTags([]); setAddExerciseId(undefined); setAddSubtypeId(undefined);
     refresh();
   }
 
+  if(!activeWorkout && finishSummary) return <section className="finishReport"><Card cls="finishReportCard"><div className="finishIcon">✓</div><h2>Workout Complete</h2><p className="muted">{finishSummary.title}</p><div className="finishStats"><div><span>Volume</span><strong>{fmtVol(finishSummary.volume)}</strong></div><div><span>Sets</span><strong>{finishSummary.sets}</strong></div><div><span>Duration</span><strong>{finishSummary.duration} min</strong></div><div><span>Recovery impact</span><strong>{finishSummary.impact}</strong></div></div><Pills>{finishSummary.muscles.map((m:string)=><span key={m}>{m}</span>)}</Pills><button className="primary" onClick={()=>setFinishSummary(undefined)}>Done</button></Card></section>;
   if(!activeWorkout) return <section className="trainStart">
     <Card cls="hero trainHero"><h2>Start Training</h2><p>No setup maze. Start a fresh workout, create a new routine on the spot, or tap an existing routine to begin immediately.</p></Card>
     <Card cls="startActions">
@@ -1907,7 +1921,7 @@ function LogPage({data}:any){
         <summary>Create new machine variant during workout</summary>
         <input value={newVariantName} onChange={e=>setNewVariantName(e.target.value)} placeholder="Variant name e.g. Cybex Leg Extension"/>
         <select value={newVariantUnit} onChange={e=>setNewVariantUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-        <label className="upload"><ImagePlus/> Add machine image<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
+        <div className="tagComposer"><input value={newVariantTag} onChange={e=>setNewVariantTag(e.target.value)} placeholder="Quick tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=newVariantTag.trim(); if(t){setNewVariantTags([...newVariantTags,t]); setNewVariantTag('');}}}>Add tag</button></div><Pills>{newVariantTags.map(t=><span key={t}>#{t}</span>)}</Pills><label className="upload"><ImagePlus/> Add machine image<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
         {newVariantPhoto&&<img className="preview" src={blobUrl(newVariantPhoto)}/>}
         <button className="primary" onClick={createVariantAndAdd}>Save variant + add to workout</button>
       </details>
@@ -1966,7 +1980,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
     const newRecord: WorkoutSet = {workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:now()};
     const id = await db.sets.add(newRecord);
     const pr = detectSetPR({...newRecord,id}, sets);
-    if(pr) setPrMessage(`🏆 ${pr}`);
+    if(pr){ setPrMessage(`🏆 ${pr}`); haptic([30,40,60]); } else haptic(8);
     onSave(); refresh();
   }
   return <Card cls="loggerV15">
@@ -1980,7 +1994,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
         {suggestedReplacementsFor(originalEx||ex, allExercises||[]).map((s:Exercise)=><button key={s.id} onClick={()=>applySwap(s.id!)}><strong>{s.name}</strong><span>{s.muscle} · {(s.secondaryMuscles||[]).join(', ')}</span></button>)}
       </div>}
       <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>
-      <div className="rirExplainer"><strong>RIR</strong> = reps in reserve. Example: RIR 2 means you could have done about 2 more reps.</div>
+      {subtype?.tags?.length?<div className="machineTagsInline">{subtype.tags.map((t:string)=><span key={t}>#{t}</span>)}</div>:null}<div className="rirExplainer"><strong>RIR</strong> = reps in reserve. Example: RIR 2 means you could have done about 2 more reps.</div>
       {prMessage && <div className="prToastInline">{prMessage}</div>}
       {activeInput&&<div className="keyboardAssistPanel">
         <div><strong>{ex.name}</strong><span>Set {activeInput.set} · editing {activeInput.field}</span></div>

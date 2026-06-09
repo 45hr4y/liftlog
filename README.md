@@ -310,3 +310,12 @@ Added:
 - Added edit controls for meal entries.
 - Added backup recency reminder.
 - Clarified workout-only vs routine-save behaviour.
+
+## v32 Premium UX + Machine Tags
+- Added quick machine tags for variants, including during workouts.
+- Machine tags show inside the workout logger.
+- Added finish workout report.
+- Added haptic feedback hooks for set save, PR, and workout finish.
+- Removed old heatmap legend.
+- Added floating action button.
+- Added completion animations.
