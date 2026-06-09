@@ -1,5 +1,5 @@
 
-added 70 packages, and audited 71 packages in 10s
+added 70 packages, and audited 71 packages in 8s
 
 7 packages are looking for funding
   run `npm fund` for details
@@ -13,7 +13,7 @@ Run `npm audit` for details.
 
 ---BUILD---
 
-> liftlog-v30-recovery-history-edit@30.0.0 build
+> liftlog-v31-safety-sharing-polish@31.0.0 build
 > tsc && vite build
 
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
@@ -23,6 +23,6 @@ rendering chunks...
 computing gzip size...
 [2mdist/[22m[2massets/[22m[32mmanifest-DyUkWq-m.webmanifest  [39m[1m[2m  0.41 kB[22m[1m[22m
 [2mdist/[22m[32mindex.html                            [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:   0.31 kB[22m
-[2mdist/[22m[2massets/[22m[35mindex-DxA4rBVY.css             [39m[1m[2m 46.91 kB[22m[1m[22m[2m │ gzip:   9.35 kB[22m
-[2mdist/[22m[2massets/[22m[36mindex-D6x98lLN.js              [39m[1m[2m350.81 kB[22m[1m[22m[2m │ gzip: 107.12 kB[22m
-[32m✓ built in 4.14s[39m
+[2mdist/[22m[2massets/[22m[35mindex-B31Oq49L.css             [39m[1m[2m 48.04 kB[22m[1m[22m[2m │ gzip:   9.53 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-C4NPe8Xw.js              [39m[1m[2m354.48 kB[22m[1m[22m[2m │ gzip: 108.06 kB[22m
+[32m✓ built in 2.46s[39m

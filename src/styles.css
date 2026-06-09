@@ -1501,3 +1501,19 @@ body[data-theme="dark"] .quickWeightRow button{
 .mealDeleteList{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.danger{background:#fee2e2!important;color:#991b1b!important}
 body[data-theme="dark"] .recoveryStatusCard{background:#020617;border-color:#1e293b}body[data-theme="dark"] .recommendedTrain{background:linear-gradient(135deg,#064e3b,#1e3a8a)}
 @media(max-width:720px){.recoveryStatusGrid{grid-template-columns:1fr}.combinedWorkoutRowWrap{grid-template-columns:1fr}.editableHistorySet{grid-template-columns:1fr 1fr}.editableHistorySet button{width:max-content}}
+
+/* LiftLog v31 Safety + Sharing Polish */
+.onboardingCard{background:linear-gradient(135deg,#eff6ff,#ecfdf5);border:1px solid #bfdbfe}
+.onboardingCard h2{margin:6px 0;font-size:30px}
+.onboardingSteps{display:grid;gap:8px;margin:12px 0}
+.onboardingSteps span{border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.78);color:#334155;font-weight:900}
+.emptyStateCard{border:1px dashed #93c5fd;background:#f8fafc}
+.backupReminderV31{border:1px solid #bfdbfe;background:#eff6ff}
+.editPanelV31{border:1px solid #bfdbfe;background:#f8fafc}
+.historyActions{display:flex;gap:6px;flex-wrap:wrap}
+.historyActions button{border-radius:999px;padding:6px 9px;font-size:12px}
+.historyActions button:first-child{background:#dbeafe;color:#1d4ed8}
+.mealDeleteList span{display:flex;gap:4px}.mealDeleteList span button:first-child{background:#dbeafe;color:#1d4ed8}
+body[data-theme="dark"] .onboardingCard,body[data-theme="dark"] .emptyStateCard,body[data-theme="dark"] .backupReminderV31,body[data-theme="dark"] .editPanelV31{background:#020617;border-color:#1e3a8a}
+body[data-theme="dark"] .onboardingSteps span{background:#1e293b;color:#cbd5e1}
+@media(max-width:720px){.historyActions{grid-column:1/-1}}

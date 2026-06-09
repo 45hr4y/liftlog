@@ -301,3 +301,12 @@ Added:
 - Recovery cards now show status, score, recent sets and last trained.
 - Added recommended training suggestion based on routine readiness.
 - Added delete controls for workouts, individual sets, nutrition days and meal entries.
+
+## v31 Safety + Sharing Polish
+- Added first-time onboarding card.
+- Added local-data and backup reminder.
+- Added empty state on Home for new users.
+- Added edit controls for previous sets.
+- Added edit controls for meal entries.
+- Added backup recency reminder.
+- Clarified workout-only vs routine-save behaviour.

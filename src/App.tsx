@@ -1084,6 +1084,7 @@ export default function App() {
   const [activeWorkoutId, setActiveWorkoutIdState] = useState<number|undefined>();
   function setActiveWorkoutId(id:number|undefined){ setActiveWorkoutIdState(id); if(id) localStorage.setItem('liftlog-active-workout-id', String(id)); else localStorage.removeItem('liftlog-active-workout-id'); }
   const [selectedExerciseId, setSelectedExerciseId] = useState<number|undefined>();
+  const [showOnboarding,setShowOnboarding]=useState(()=>localStorage.getItem('liftlog-onboarded-v31')!=='yes');
 
   async function refresh() {
     setSettings(await db.settings.get('settings') || {id:'settings',unit:'kg',theme:'light'});
@@ -1106,6 +1107,7 @@ export default function App() {
       <button className="iconBtn" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'}); refresh();}}>{settings.theme==='light'?<Moon/>:<Sun/>}</button>
     </header>
     <main>
+      {showOnboarding && <OnboardingCard onDone={()=>{localStorage.setItem('liftlog-onboarded-v31','yes'); setShowOnboarding(false);}} setPage={setPage}/>} 
       {page==='home' && <HomePage data={{exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts,setPage}} />}
       {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,routines,routineExercises,refresh,setPage,setSelectedExerciseId}} />}
       {page==='exerciseDetail' && <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} />}
@@ -1409,6 +1411,20 @@ function detectSetPR(newSet: WorkoutSet, allSets: WorkoutSet[]) {
   return '';
 }
 
+
+function OnboardingCard({onDone,setPage}:{onDone:()=>void;setPage:(p:Page)=>void}) {
+  return <Card cls="onboardingCard">
+    <span className="eyebrow">Welcome to LiftLog</span>
+    <h2>Before you start</h2>
+    <p className="muted">Your data is stored locally on this device. Export backups regularly, especially before switching phones or clearing browser data.</p>
+    <div className="onboardingSteps"><span>1. Start a workout or routine</span><span>2. Favourite exercises for graphs</span><span>3. Add machine variants/photos as you train</span><span>4. Export JSON backups often</span></div>
+    <div className="grid2"><button className="primary" onClick={()=>{setPage('log'); onDone();}}>Start training</button><button className="secondary" onClick={onDone}>Got it</button></div>
+  </Card>
+}
+function EmptyState({title,body,action}:{title:string;body:string;action?:any}) {
+  return <Card cls="emptyStateCard"><h3>{title}</h3><p className="muted">{body}</p>{action}</Card>
+}
+
 function HomePage({data}:any){
   const {exercises,subtypes,routines,routineExercises,workouts,sets,setPage}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
@@ -1434,6 +1450,8 @@ function HomePage({data}:any){
       </div>
       <button className="primary glowBtn" onClick={()=>setPage('log')}>Start Workout</button>
     </Card>
+
+    {!workouts.length && <EmptyState title="No workouts yet" body="Start a workout from scratch, or create a routine and LiftLog will begin tracking your history, recovery, stats and nutrition." action={<button className="primary" onClick={()=>setPage('log')}>Start first workout</button>} />}
 
     <div className="quickActions quickActionsV12">
       <button onClick={()=>setPage('exercises')}>Exercises</button>
@@ -1876,7 +1894,7 @@ function LogPage({data}:any){
     <div className="floatingTimer smartTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Reset</button><button onClick={()=>setTimer((timer||Date.now())-15000)}>+15</button></div>
     <Card cls="addExercisePanel workoutVariantCreator">
       <h3>Add exercise or variant</h3>
-      <p className="muted">Add exercises while training. You can also create a new machine variant with a photo and save it permanently for future workouts.</p>
+      <p className="muted">Add exercises while training. In a saved routine, added exercises become part of the routine. In a new workout, you can choose whether to save it as a routine when you finish.</p>
       <ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(undefined)}} placeholder="Search exercise to add..." />
       <select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}>
         <option value="">Optional existing variant / machine</option>
@@ -2184,6 +2202,7 @@ function downloadNutritionJson(data:any, filename:string) {
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'}));
   a.download = filename;
   a.click();
+  try{ localStorage.setItem('liftlog-last-backup', new Date().toISOString()); }catch{}
 }
 
 
@@ -2532,6 +2551,13 @@ function BackupPage({data}:any){
 function HistoryPage({data}:any){
   const {exercises,routines,workouts,sets,replacements,refresh}=data;
   const [selectedId,setSelectedId]=useState<number|undefined>();
+  const [editingSet,setEditingSet]=useState<WorkoutSet|undefined>();
+  const [editWeight,setEditWeight]=useState('');
+  const [editReps,setEditReps]=useState('');
+  const [editRir,setEditRir]=useState('');
+  const [editingMeal,setEditingMeal]=useState<{day:string;meal:MealLog}|undefined>();
+  const [editMealTitle,setEditMealTitle]=useState('');
+  const [editMealNotes,setEditMealNotes]=useState('');
   const [nutritionLogs,setNutritionLogs]=useState<Record<string,DailyNutritionLog>>(()=>loadNutritionLogs());
   const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
   const selected = completed.find((w:Workout)=>w.id===selectedId);
@@ -2558,6 +2584,20 @@ function HistoryPage({data}:any){
     setNutritionLogs(updated);
     saveNutritionLogs(updated);
   }
+  async function saveSetEdit(){
+    if(!editingSet?.id) return;
+    await db.sets.update(editingSet.id,{weight:Number(editWeight||0),reps:Number(editReps||0),rir:editRir?Number(editRir):undefined});
+    setEditingSet(undefined); refresh();
+  }
+  function beginSetEdit(s:WorkoutSet){ setEditingSet(s); setEditWeight(String(s.weight)); setEditReps(String(s.reps)); setEditRir(s.rir!==undefined?String(s.rir):''); }
+  function beginMealEdit(day:string, meal:MealLog){ setEditingMeal({day,meal}); setEditMealTitle(meal.title); setEditMealNotes(meal.notes||''); }
+  function saveMealEdit(){
+    if(!editingMeal) return;
+    const entry=nutritionLogs[editingMeal.day]; if(!entry) return;
+    const updatedEntry={...entry, meals:entry.meals.map(m=>m.id===editingMeal.meal.id?{...m,title:editMealTitle,notes:editMealNotes}:m)};
+    const updated={...nutritionLogs,[editingMeal.day]:updatedEntry};
+    setNutritionLogs(updated); saveNutritionLogs(updated); setEditingMeal(undefined);
+  }
   function deleteMeal(day:string, mealId:string){
     if(!confirm('Delete this meal entry?')) return;
     const entry=nutritionLogs[day];
@@ -2576,9 +2616,10 @@ function HistoryPage({data}:any){
         <button className="secondary mini" onClick={()=>setSelectedId(undefined)}>← Back to history</button>
         <div className="row"><div><h2>{selected.title}</h2><p className="muted">{selected.date} · {durationMinutes(selected)} min · {ss.length} sets · {fmtVol(workoutVolume(selected,sets))}</p></div><button className="danger mini" onClick={()=>deleteWorkout(selected)}>Delete workout</button></div>
       </Card>
+      {editingSet&&<Card cls="editPanelV31"><h3>Edit set</h3><div className="grid3"><label>Weight<input type="number" inputMode="decimal" value={editWeight} onChange={e=>setEditWeight(e.target.value)}/></label><label>Reps<input type="number" inputMode="numeric" value={editReps} onChange={e=>setEditReps(e.target.value)}/></label><label>RIR<input type="number" inputMode="decimal" value={editRir} onChange={e=>setEditRir(e.target.value)}/></label></div><div className="grid2"><button className="primary" onClick={saveSetEdit}>Save set</button><button className="secondary" onClick={()=>setEditingSet(undefined)}>Cancel</button></div></Card>}
       {grouped.map((g:any)=><Card key={g.ex.id} cls="historyExercise">
         <h3>{g.ex.name}</h3>{replacements?.some((r:WorkoutReplacement)=>r.workoutId===selected.id&&r.replacementExerciseId===g.ex.id)&&<p className="muted">Used as a replacement in this workout.</p>}
-        {g.rows.sort((a:WorkoutSet,b:WorkoutSet)=>a.setNumber-b.setNumber).map((s:WorkoutSet)=><div className="historySet editableHistorySet" key={s.id}><span>Set {s.setNumber}</span><strong>{s.weight}{s.unit} × {s.reps}</strong><em>{fmtVol(volumeKg(s))}</em><button onClick={()=>deleteSet(s.id)}>Delete</button></div>)}
+        {g.rows.sort((a:WorkoutSet,b:WorkoutSet)=>a.setNumber-b.setNumber).map((s:WorkoutSet)=><div className="historySet editableHistorySet" key={s.id}><span>Set {s.setNumber}</span><strong>{s.weight}{s.unit} × {s.reps}</strong><em>{fmtVol(volumeKg(s))}</em><div className="historyActions"><button onClick={()=>beginSetEdit(s)}>Edit</button><button onClick={()=>deleteSet(s.id)}>Delete</button></div></div>)}
       </Card>)}
     </section>
   }
@@ -2589,7 +2630,8 @@ function HistoryPage({data}:any){
   const meals7 = Object.entries(nutritionLogs).filter(([d])=>new Date(d)>=new Date(Date.now()-7*86400000)).reduce((a,[,n])=>a+(n.meals?.length||0),0);
 
   return <section>
-    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
+    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can edit/delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
+    {editingMeal&&<Card cls="editPanelV31"><h3>Edit meal</h3><input value={editMealTitle} onChange={e=>setEditMealTitle(e.target.value)} placeholder="Meal title"/><textarea value={editMealNotes} onChange={e=>setEditMealNotes(e.target.value)} placeholder="Meal notes"/><div className="grid2"><button className="primary" onClick={saveMealEdit}>Save meal</button><button className="secondary" onClick={()=>setEditingMeal(undefined)}>Cancel</button></div></Card>}
     <div className="historySummaryGrid">
       <Card><span className="eyebrow">7-day volume</span><h3>{fmtVol(totalVol7)}</h3></Card>
       <Card><span className="eyebrow">Workouts</span><h3>{completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).length}</h3></Card>
@@ -2602,7 +2644,7 @@ function HistoryPage({data}:any){
       return <Card key={day} cls="combinedDayCard">
         <div className="row"><h3>{new Date(day).toLocaleDateString([], {weekday:'long', day:'numeric', month:'short'})}</h3>{n&&<button className="danger mini" onClick={()=>deleteNutritionDay(day)}>Delete nutrition</button>}</div>
         {dayWorkouts.map((w:Workout)=>{ const routine=routines.find((r:Routine)=>r.id===w.routineId); const ss=workoutSetsFor(w,sets); return <div className="combinedWorkoutRowWrap" key={w.id}><button className="combinedWorkoutRow detailed" onClick={()=>setSelectedId(w.id)}><span style={{background:routine?.color||'#2563eb'}}/><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(workoutVolume(w,sets))} · {durationMinutes(w)} min · Top: {ss.length?exercises.find((e:Exercise)=>e.id===ss[0].exerciseId)?.name:'—'}</em></button><button className="danger mini" onClick={()=>deleteWorkout(w)}>Delete</button></div> })}
-        {n ? <div className="combinedNutritionRow"><strong>Nutrition · {nutritionScoreV19(n)}%</strong><span>Water {n.waterMl}ml · Meals {n.meals.length} · Protein {(n.proteinServings??0)}/{n.proteinTarget??3} · Caffeine {n.caffeineMg}mg · {n.creatineTaken?'Creatine ✓':'Creatine ○'}</span>{n.reflection&&<em>{n.reflection.slice(0,90)}</em>}<div className="mealDeleteList">{n.meals.slice(0,4).map(m=><button key={m.id} onClick={()=>deleteMeal(day,m.id)}>Delete {m.type}: {m.title.slice(0,18)}</button>)}</div></div> : <p className="muted">No nutrition logged.</p>}
+        {n ? <div className="combinedNutritionRow"><strong>Nutrition · {nutritionScoreV19(n)}%</strong><span>Water {n.waterMl}ml · Meals {n.meals.length} · Protein {(n.proteinServings??0)}/{n.proteinTarget??3} · Caffeine {n.caffeineMg}mg · {n.creatineTaken?'Creatine ✓':'Creatine ○'}</span>{n.reflection&&<em>{n.reflection.slice(0,90)}</em>}<div className="mealDeleteList">{n.meals.slice(0,4).map(m=><span key={m.id}><button onClick={()=>beginMealEdit(day,m)}>Edit {m.type}</button><button onClick={()=>deleteMeal(day,m.id)}>Delete {m.type}</button></span>)}</div></div> : <p className="muted">No nutrition logged.</p>}
       </Card>
     }) : <Card><p className="muted">No history yet.</p></Card>}
   </section>
