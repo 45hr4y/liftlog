@@ -1,4 +1,6 @@
 
+function safeArray<T>(x:T[]|undefined|null):T[]{ return Array.isArray(x)?x:[]; }
+
 function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
 
 import { useEffect, useMemo, useState } from 'react';
@@ -1833,10 +1835,18 @@ function LogPage({data}:any){
     if(!activeWorkout?.id)return; 
     const endedAt=now();
     await db.workouts.update(activeWorkout.id,{endedAt});
-    const workoutSets=sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id);
-    const muscles=Array.from(new Set(workoutSets.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter(Boolean)));
+    const workoutSets=(sets as WorkoutSet[]).filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id);
+    const muscles=Array.from(new Set(workoutSets.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter((m):m is string=>Boolean(m))));
     const volume=workoutSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
-    setFinishSummary({title:activeWorkout.title,volume,sets:workoutSets.length,duration:workoutDurationMinutes({...activeWorkout,endedAt}),muscles,impact:workoutSets.length>24?'High':workoutSets.length>12?'Moderate':'Light'});
+    const duration=workoutDurationMinutes({...activeWorkout,endedAt});
+    setFinishSummary({
+      title:activeWorkout.title || 'Workout',
+      volume:Number.isFinite(volume)?volume:0,
+      sets:workoutSets.length,
+      duration:Number.isFinite(duration)?duration:0,
+      muscles,
+      impact:workoutSets.length>24?'High':workoutSets.length>12?'Moderate':'Light'
+    });
     haptic([40,40,80]); 
     if(customMode && customItems.length && confirm('Save this as a reusable routine?')){
       const name = prompt('Routine name?', activeWorkout.title || 'Custom Routine') || 'Custom Routine';
@@ -1877,7 +1887,7 @@ function LogPage({data}:any){
     refresh();
   }
 
-  if(!activeWorkout && finishSummary) return <section className="finishReport"><Card cls="finishReportCard"><div className="finishIcon">✓</div><h2>Workout Complete</h2><p className="muted">{finishSummary.title}</p><div className="finishStats"><div><span>Volume</span><strong>{fmtVol(finishSummary.volume)}</strong></div><div><span>Sets</span><strong>{finishSummary.sets}</strong></div><div><span>Duration</span><strong>{finishSummary.duration} min</strong></div><div><span>Recovery impact</span><strong>{finishSummary.impact}</strong></div></div><Pills>{finishSummary.muscles.map((m:string)=><span key={m}>{m}</span>)}</Pills><button className="primary" onClick={()=>setFinishSummary(undefined)}>Done</button></Card></section>;
+  if(!activeWorkout && finishSummary) return <section className="finishReport"><Card cls="finishReportCard"><div className="finishIcon">✓</div><h2>Workout Complete</h2><p className="muted">{finishSummary.title || 'Workout'}</p><div className="finishStats"><div><span>Volume</span><strong>{fmtVol(Number(finishSummary.volume)||0)}</strong></div><div><span>Sets</span><strong>{Number(finishSummary.sets)||0}</strong></div><div><span>Duration</span><strong>{Number(finishSummary.duration)||0} min</strong></div><div><span>Recovery impact</span><strong>{finishSummary.impact || 'Light'}</strong></div></div>{safeArray<string>(finishSummary.muscles).length?<Pills>{safeArray<string>(finishSummary.muscles).map((m:string)=><span key={m}>{m}</span>)}</Pills>:<p className="muted">No muscle groups recorded for this session.</p>}<button className="primary" onClick={()=>setFinishSummary(undefined)}>Done</button></Card></section>;
   if(!activeWorkout) return <section className="trainStart">
     <Card cls="hero trainHero"><h2>Start Training</h2><p>No setup maze. Start a fresh workout, create a new routine on the spot, or tap an existing routine to begin immediately.</p></Card>
     <Card cls="startActions">
@@ -1936,7 +1946,7 @@ function LogPage({data}:any){
     </Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; const rep=replacements.find((r:WorkoutReplacement)=>r.workoutId===activeWorkout.id&&r.routineExerciseId===it.id);
       const actualEx=rep ? exercises.find((e:Exercise)=>e.id===rep.replacementExerciseId) || ex : ex;
-      return <Logger key={it.id} item={it} originalEx={ex} ex={actualEx} replacement={rep} allExercises={exercises} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===actualEx?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} isFocused={focusedItemId===it.id} onFocusItem={()=>setFocusedItemId(it.id)} onCompleteExercise={()=>{ const idx=items.findIndex((x:RoutineExercise)=>x.id===it.id); const next=items[idx+1]; if(next){setFocusedItemId(next.id); setTimeout(()=>document.getElementById(`logger-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'start'}),160);} }} onSave={()=>setTimer(Date.now())}/> })}
+      return <Logger key={it.id} item={it} originalEx={ex} ex={actualEx} replacement={rep} allExercises={exercises} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===actualEx?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} isFocused={focusedItemId===it.id} onFocusItem={()=>setFocusedItemId(it.id)} onCompleteExercise={()=>{ const idx=items.findIndex((x:RoutineExercise)=>x.id===it.id); const next=items[idx+1]; if(next){setFocusedItemId(next.id); setTimeout(()=>document.getElementById(`logger-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),160);} }} onSave={()=>setTimer(Date.now())}/> })}
   </section>
 }
 
@@ -2008,9 +2018,9 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
     }
   }
   return <Card cls={`loggerV15 workoutLogger ${isFocused?"focusedLogger":""} ${exerciseComplete?"completeLogger":""}`} >
-    <details id={`logger-${item.id}`} open={isFocused || !exerciseComplete} className={exerciseComplete?"exerciseCompleteDetails":""} onToggle={onFocusItem}>
+    <details id={`logger-${item.id}`} open={isFocused || !exerciseComplete} className={exerciseComplete?"exerciseCompleteDetails":""} onClick={onFocusItem}>
       <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{replacement?`Replaces ${originalEx?.name} today`:(subtype?.name||'No subtype selected')}</p></div></div></summary>
-      {justCompleted&&<div className="completeBurst">✓ Exercise Complete</div>}
+      {justCompleted&&<div className="completeBurst inlineCompleteBurst">✓ Exercise Complete</div>}
       {exerciseComplete&&<div className="compactCompleteRow">✓ {ex.name} · {todaySets.length} sets complete</div>}
       <div className="swapPanel">
         <button className="secondary mini" onClick={()=>setSwapOpen(!swapOpen)}>Replace Exercise Today</button>

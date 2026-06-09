@@ -1610,3 +1610,89 @@ body[data-theme="dark"] .finishStats div{background:#020617}body[data-theme="dar
     transform:scale(.995);
   }
 }
+
+
+/* LiftLog v34 Finish Flow Stability */
+.completeBurst{
+  position:relative!important;
+  top:auto!important;
+  z-index:1!important;
+  margin:10px 0 12px!important;
+}
+.keyboardAssistPanel{
+  z-index:16!important;
+}
+.workoutHeaderSticky{
+  z-index:40!important;
+}
+.finishReportCard{
+  animation:finishIn .24s ease both;
+}
+@keyframes finishIn{
+  from{opacity:0;transform:translateY(8px) scale(.98)}
+  to{opacity:1;transform:none}
+}
+.exerciseCompleteDetails summary{
+  position:relative;
+}
+.exerciseCompleteDetails[open] .compactCompleteRow{
+  display:none;
+}
+@media(max-width:720px){
+  .completeBurst{
+    top:auto!important;
+  }
+}
+
+
+/* LiftLog v35 Header + Collapse Collision Fix */
+.workoutV15{
+  scroll-padding-top:150px;
+}
+.mobileWorkoutHeader,
+.workoutHeaderSticky{
+  isolation:isolate;
+}
+.workoutLogger,
+.loggerV15,
+.exerciseCompleteDetails{
+  scroll-margin-top:160px;
+}
+.inlineCompleteBurst,
+.completeBurst.inlineCompleteBurst{
+  position:static!important;
+  top:auto!important;
+  z-index:0!important;
+  margin:10px 0 12px!important;
+  transform-origin:center;
+  pointer-events:none;
+}
+.completeLogger{
+  transform:none!important;
+}
+.exerciseCompleteDetails:not([open]){
+  animation:none!important;
+}
+.compactCompleteRow{
+  position:static!important;
+  z-index:0!important;
+  margin-top:10px!important;
+}
+.focusedLogger{
+  position:relative;
+  z-index:2;
+}
+.workoutHeaderSticky + .floatingTimer,
+.smartTimer{
+  z-index:18!important;
+}
+@media(max-width:720px){
+  .workoutV15{
+    scroll-padding-top:170px;
+  }
+  .workoutLogger,
+  .loggerV15,
+  .exerciseCompleteDetails{
+    scroll-margin-top:170px;
+  }
+}

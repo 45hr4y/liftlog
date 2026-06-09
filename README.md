@@ -331,3 +331,19 @@ Added:
 - Completed exercise collapse styling.
 - Auto-focus/scroll toward the next exercise after completion.
 - PR banner and set-complete animation polish.
+
+
+## v34 Finish Flow Stability
+- Fixed intermittent blank screen risk after finishing workouts.
+- Finish report now guards against undefined/null summary fields.
+- Completion banner no longer uses sticky positioning, preventing overlap with workout header.
+- Safer exercise completion click/focus behaviour.
+
+
+## v35 Header + Collapse Fix
+
+Fixed:
+- Completed exercise collapse no longer clashes with the floating workout header.
+- Completion banner is now inline-only, not sticky.
+- Added safe scroll margin under the workout header.
+- Auto-scroll to next exercise now centers the next card instead of pushing it underneath the header.
