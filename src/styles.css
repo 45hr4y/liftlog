@@ -1719,3 +1719,65 @@ body:has(.workoutV15) .floatingFab{
     bottom:calc(118px + env(safe-area-inset-bottom))!important;
   }
 }
+
+/* LiftLog v37 Blank Screen Guard */
+.blankGuardCard{
+  margin:24px auto;
+  max-width:620px;
+  border:1px solid #fecaca;
+  background:#fff7ed;
+}
+.blankGuardCard h2{
+  margin-top:0;
+}
+.blankGuardCard p{
+  color:#64748b;
+}
+.blankGuardActions{
+  display:grid;
+  gap:10px;
+  margin:16px 0;
+}
+.blankGuardActions button{
+  min-height:44px;
+  border-radius:14px;
+  background:#0f172a;
+  color:white;
+  font-weight:950;
+}
+.blankGuardActions button:nth-child(2){
+  background:#2563eb;
+}
+.blankGuardActions button:nth-child(3){
+  background:#64748b;
+}
+.blankGuardCard small{
+  display:block;
+  color:#991b1b;
+  word-break:break-word;
+}
+body[data-theme="dark"] .blankGuardCard{
+  background:#1e293b;
+  border-color:#7f1d1d;
+}
+
+/* LiftLog v38 Hardening Pass */
+.runtimeErrorCard{
+  border:1px solid #fed7aa;
+  background:#fff7ed;
+  margin-bottom:14px;
+}
+.runtimeErrorCard h3{
+  margin:0 0 6px;
+}
+.runtimeErrorCard p{
+  color:#9a3412;
+  word-break:break-word;
+}
+.blankGuardActions{
+  grid-template-columns:1fr;
+}
+body[data-theme="dark"] .runtimeErrorCard{
+  background:#1e293b;
+  border-color:#9a3412;
+}

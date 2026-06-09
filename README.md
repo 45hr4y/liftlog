@@ -356,3 +356,19 @@ Fixed:
 - Finish summary now safely handles incomplete/missing workout data.
 - Finish report shows how many planned sets were left incomplete.
 - Floating + button is hidden during active workouts so it no longer clashes with the timer controls.
+
+## v37 Blank Screen Guard
+- Added app-wide error boundary to prevent white/blank screens.
+- Blank screens now show a recoverable error card.
+- Added buttons to retry, reset active workout view, or reload.
+- Refresh now tolerates missing/older local database tables more safely.
+- Exercise detail page now has a safe fallback if no exercise is selected.
+
+## v38 Hardening Pass
+- Added global runtime error listeners.
+- Added recoverable runtime error card.
+- Added emergency localStorage backup button for crash cases.
+- Invalid active workout IDs are cleared safely.
+- Active workouts ignore already-ended workouts.
+- Hardened workout finish, logger, seed and page rendering paths.
+- Fixed stale Progress page navigation to use Stats.

@@ -1,3 +1,31 @@
+import React, { Component, useEffect, useMemo, useState } from 'react';
+import Dexie, { Table } from 'dexie';
+import {Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2, Apple, Star} from 'lucide-react';
+
+
+function emergencyExportLocalData(){
+  try{
+    const payload:any = {createdAt:new Date().toISOString(), localStorage:{}, indexedDBNote:'Use normal backup page for full IndexedDB export when the app loads.'};
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);
+      if(key) payload.localStorage[key]=localStorage.getItem(key);
+    }
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+    a.download=`LiftLog_Emergency_Backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+  }catch(err){ alert('Emergency backup failed. Try the Backup page after reloading.'); }
+}
+function clearStuckLiftLogState(){
+  try{
+    localStorage.removeItem('liftlog-active-workout-id');
+    localStorage.removeItem('liftlog-onboarded-v31');
+  }catch{}
+}
+function safeId(x:any):number|undefined{
+  const n=Number(x);
+  return Number.isFinite(n) && n>0 ? n : undefined;
+}
 
 function safeNumber(x:any, fallback=0){ const n=Number(x); return Number.isFinite(n)?n:fallback; }
 function safeText(x:any, fallback=''){ return typeof x==='string' && x.trim()?x:fallback; }
@@ -6,9 +34,6 @@ function safeArray<T>(x:T[]|undefined|null):T[]{ return Array.isArray(x)?x:[]; }
 
 function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
 
-import { useEffect, useMemo, useState } from 'react';
-import Dexie, { Table } from 'dexie';
-import {Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2, Apple, Star} from 'lucide-react';
 
 type Unit = 'kg' | 'lb';
 type Theme = 'light' | 'dark';
@@ -1014,6 +1039,7 @@ const starterExercises: Omit<Exercise, 'id' | 'createdAt'>[] = [
 ];
 
 async function seed(){
+  try{
   const s=await db.settings.get('settings');
   if(!s) await db.settings.put({id:'settings',unit:'kg',theme:'light'});
 
@@ -1048,6 +1074,8 @@ async function seed(){
     await addToRoutine(pullId,['Lat Pulldown','Seated Cable Row','Reverse Pec Deck','EZ Bar Curl']);
     await addToRoutine(legsId,['Hack Squat','Romanian Deadlift','Leg Extension','Seated Leg Curl','Standing Calf Raise']);
   }
+
+  }catch(err){ console.error('seed failed safely', err); }
 }
 
 function allTimePRsForExercise(exerciseId: number | undefined, sets: WorkoutSet[]) {
@@ -1092,17 +1120,22 @@ export default function App() {
   function setActiveWorkoutId(id:number|undefined){ setActiveWorkoutIdState(id); if(id) localStorage.setItem('liftlog-active-workout-id', String(id)); else localStorage.removeItem('liftlog-active-workout-id'); }
   const [selectedExerciseId, setSelectedExerciseId] = useState<number|undefined>();
   const [showOnboarding,setShowOnboarding]=useState(()=>localStorage.getItem('liftlog-onboarded-v31')!=='yes');
+  const [runtimeError,setRuntimeError]=useState<string>('');
 
   async function refresh() {
-    setSettings(await db.settings.get('settings') || {id:'settings',unit:'kg',theme:'light'});
-    setExercises(await db.exercises.orderBy('name').toArray());
-    setSubtypes(await db.subtypes.toArray());
-    setRoutines(await db.routines.orderBy('name').toArray());
-    setRoutineExercises(await db.routineExercises.toArray());
-    setWorkouts(await db.workouts.orderBy('date').reverse().toArray());
-    setSets(await db.sets.toArray());
-    setPlannedWorkouts(await db.plannedWorkouts.toArray());
-    setReplacements(await db.replacements.toArray());
+    try {
+      setSettings(await db.settings.get('settings') || {id:'settings',unit:'kg',theme:'light'});
+      setExercises(await db.exercises.orderBy('name').toArray());
+      setSubtypes(await db.subtypes.toArray());
+      setRoutines(await db.routines.orderBy('name').toArray());
+      setRoutineExercises(await db.routineExercises.toArray());
+      setWorkouts(await db.workouts.orderBy('date').reverse().toArray());
+      setSets(await db.sets.toArray());
+      try{ setPlannedWorkouts(await db.plannedWorkouts.toArray()); }catch{ setPlannedWorkouts([]); }
+      try{ setReplacements(await db.replacements.toArray()); }catch{ setReplacements([]); }
+    } catch(err) {
+      console.error('refresh failed', err);
+    }
   }
   useEffect(()=>{ seed().then(async()=>{ await refresh(); const saved=localStorage.getItem('liftlog-active-workout-id'); if(saved){ const w=await db.workouts.get(Number(saved)); if(w && !w.endedAt) setActiveWorkoutId(Number(saved)); } }); },[]);
   useEffect(()=>{ document.body.dataset.theme = settings.theme; },[settings.theme]);
@@ -1114,10 +1147,12 @@ export default function App() {
       <button className="iconBtn" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'}); refresh();}}>{settings.theme==='light'?<Moon/>:<Sun/>}</button>
     </header>
     <main>
+      <PageCrashGuard>
+      {runtimeError&&<Card cls="runtimeErrorCard"><h3>LiftLog recovered from an error</h3><p>{runtimeError}</p><div className="grid3"><button className="primary" onClick={()=>setRuntimeError('')}>Dismiss</button><button className="secondary" onClick={()=>{clearStuckLiftLogState(); setActiveWorkoutId(undefined); setPage('home'); setRuntimeError('');}}>Safe Home</button><button className="secondary" onClick={emergencyExportLocalData}>Emergency Backup</button></div></Card>}
       {showOnboarding && <OnboardingCard onDone={()=>{localStorage.setItem('liftlog-onboarded-v31','yes'); setShowOnboarding(false);}} setPage={setPage}/>} 
       {page==='home' && <HomePage data={{exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts,setPage}} />}
       {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,routines,routineExercises,refresh,setPage,setSelectedExerciseId}} />}
-      {page==='exerciseDetail' && <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} />}
+      {page==='exerciseDetail' && (selectedExerciseId ? <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} /> : <EmptyState title="Exercise not selected" body="Go back to the Exercise Library and choose an exercise again." action={<button className="primary" onClick={()=>setPage('exercises')}>Open exercises</button>} />)}
       {page==='subtypes' && <SubtypesPage data={{exercises,subtypes,refresh}} />}
       {page==='routines' && <RoutinesPage data={{exercises,subtypes,routines,routineExercises,refresh}} />}
       {page==='log' && <LogPage data={{settings,exercises,subtypes,routines,routineExercises,workouts,sets,replacements,activeWorkout,setActiveWorkoutId,refresh}} />}
@@ -1128,6 +1163,7 @@ export default function App() {
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
       {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
+      </PageCrashGuard>
     </main>
     {!activeWorkout && <div className="floatingFab"><button onClick={()=>setPage('log')}>＋</button><div><button onClick={()=>setPage('log')}>Start</button><button onClick={()=>setPage('routines')}>Routine</button><button onClick={()=>setPage('exercises')}>Exercise</button></div></div>}
     <nav className="tabs fiveTabs premiumTabs">
@@ -1531,7 +1567,7 @@ function HomePage({data}:any){
     <Card cls="premiumCard">
       <div className="sectionHeader">
         <h3>Recent PR Signals</h3>
-        <button className="textBtn" onClick={()=>setPage('progress')}>Progress</button>
+        <button className="textBtn" onClick={()=>setPage('stats')}>Progress</button>
       </div>
       {prs.length ? prs.map((item:any)=><div className="prFeedItem" key={item.set.id}>
         <div className="prIcon">🏆</div>
@@ -1849,7 +1885,7 @@ function LogPage({data}:any){
         duration: safeNumber(duration),
         muscles,
         impact: workoutSets.length>24?'High':workoutSets.length>12?'Moderate':'Light',
-        incomplete: Math.max(0, targetSets - workoutSets.length)
+        incomplete: Math.max(0, safeNumber(typeof targetSets!=='undefined'?targetSets:0) - workoutSets.length)
       });
       await db.workouts.update(activeWorkout.id,{endedAt});
       if(customMode && customItems.length && confirm('Save this as a reusable routine?')){
@@ -1926,8 +1962,8 @@ function LogPage({data}:any){
     <Card><h3>Existing routines</h3><div className="routineStartGrid">{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><button key={r.id} className="routineStartCard" onClick={()=>startRoutine(r.id!)}><span style={{background:r.color}}/><strong>{r.name}</strong><em>Tap to start</em></button>)}</div></Card>
     <Card><h3>Timeout protection</h3><p className="muted">Sets save immediately. If the page refreshes, LiftLog will try to resume your unfinished workout. During workouts, screen wake lock is requested where your browser supports it.</p></Card>
   </section>;
-  const routineItems=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
-  const items=customMode || !activeWorkout.routineId ? customItems : routineItems;
+  const routineItems=(routineExercises as RoutineExercise[]).filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=(customMode || !activeWorkout.routineId ? customItems : routineItems).filter((it:RoutineExercise)=>it && it.exerciseId);
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
   const completedSets = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>`${s.exerciseId}-${s.subtypeId||0}-${s.setNumber}`)).size;
   const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
@@ -1982,6 +2018,7 @@ function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Wor
   return [];
 }
 function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave,isFocused,onFocusItem,onCompleteExercise}:any){
+  if(!ex || !workout || !item) return <Card cls="loggerV15"><p className="muted">This exercise could not be loaded safely.</p></Card>;
   const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
   const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false);
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
@@ -2725,3 +2762,53 @@ function HistoryPage({data}:any){
     }) : <Card><p className="muted">No history yet.</p></Card>}
   </section>
 }
+
+class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasError:boolean;error?:any}> {
+  constructor(props:{children:React.ReactNode}) {
+    super(props);
+    this.state = {hasError:false};
+  }
+  static getDerivedStateFromError(error:any) {
+    return {hasError:true,error};
+  }
+  componentDidCatch(error:any, info:any) {
+    console.error('LiftLog render error', error, info);
+  }
+  resetActiveWorkout = () => {
+    try { localStorage.removeItem('liftlog-active-workout-id'); } catch {}
+    this.setState({hasError:false,error:undefined});
+    window.location.reload();
+  }
+  resetView = () => {
+    this.setState({hasError:false,error:undefined});
+  }
+  render() {
+    if(this.state.hasError) {
+      return <div className="shell">
+        <main>
+          <section>
+            <div className="card blankGuardCard">
+              <h2>LiftLog hit a recoverable screen error</h2>
+              <p>The app did not lose your saved data. This usually happens when one page tries to render incomplete workout/history data.</p>
+              <div className="blankGuardActions">
+                <button onClick={this.resetView}>Try again</button>
+                <button onClick={()=>{clearStuckLiftLogState(); window.location.href='/'}}>Go Home safely</button>
+                <button onClick={this.resetActiveWorkout}>Reset active workout view</button>
+                <button onClick={emergencyExportLocalData}>Emergency backup</button>
+                <button onClick={()=>window.location.reload()}>Reload app</button>
+              </div>
+              <small>{String(this.state.error?.message || this.state.error || 'Unknown error')}</small>
+            </div>
+          </section>
+        </main>
+      </div>;
+    }
+    return this.props.children;
+  }
+}
+
+function PageCrashGuard({children}:{children:React.ReactNode}) {
+  return <LiftLogErrorBoundary>{children}</LiftLogErrorBoundary>;
+}
+
+
