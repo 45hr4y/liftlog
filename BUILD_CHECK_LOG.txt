@@ -1,5 +1,19 @@
 
-> liftlog-v22-exercise-catalogue@22.0.0 build
+added 70 packages, and audited 71 packages in 9s
+
+7 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+---BUILD---
+
+> liftlog-v24-favourite-exercises@24.0.0 build
 > tsc && vite build
 
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
@@ -9,6 +23,6 @@ rendering chunks...
 computing gzip size...
 [2mdist/[22m[2massets/[22m[32mmanifest-DyUkWq-m.webmanifest  [39m[1m[2m  0.41 kB[22m[1m[22m
 [2mdist/[22m[32mindex.html                            [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:   0.31 kB[22m
-[2mdist/[22m[2massets/[22m[35mindex-qIRNmoes.css             [39m[1m[2m 37.49 kB[22m[1m[22m[2m │ gzip:   7.79 kB[22m
-[2mdist/[22m[2massets/[22m[36mindex-CE68W_OJ.js              [39m[1m[2m336.86 kB[22m[1m[22m[2m │ gzip: 103.14 kB[22m
-[32m✓ built in 3.59s[39m
+[2mdist/[22m[2massets/[22m[35mindex-D9qfU15k.css             [39m[1m[2m 40.78 kB[22m[1m[22m[2m │ gzip:   8.29 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-DqdXSU4H.js              [39m[1m[2m340.66 kB[22m[1m[22m[2m │ gzip: 104.61 kB[22m
+[32m✓ built in 3.63s[39m

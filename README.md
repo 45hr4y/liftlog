@@ -247,3 +247,22 @@ Added:
 - Starter Push / Pull / Legs routines if no routines exist yet.
 - Catalogue search and filters for exercises.
 - Existing custom exercises are preserved; the catalogue only fills missing names.
+
+## v23 Streamlined Training + Analytics
+- Removed workout as a separate bottom tab; training is accessed through Home/More to reduce clutter.
+- Start routines directly from routine cards without a second confirmation selector.
+- Added create-and-start-new-routine flow.
+- Fixed weight placeholders so lb variants show lb.
+- Variant-selected units are locked automatically.
+- Added in-app RIR explanation.
+- Combined workout and nutrition history.
+- Added exercise progression graphs in Stats.
+
+
+## v24 Favourite Exercises
+
+Added:
+- Favourite/star exercises from the Exercise Library.
+- Exercise Progression Graphs can show favourites only.
+- Favourite count appears in More.
+- Cleaner stats dropdown when you have many catalogue exercises.

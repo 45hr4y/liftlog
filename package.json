@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v22-exercise-catalogue",
-  "version": "22.0.0",
+  "name": "liftlog-v24-favourite-exercises",
+  "version": "24.0.0",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Dexie, { Table } from 'dexie';
-import {Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2, Apple} from 'lucide-react';
+import {Activity, BarChart3, CalendarDays, Check, Dumbbell, Home, ImagePlus, ListChecks, Moon, Play, Plus, Settings, Sun, Trash2, Apple, Star} from 'lucide-react';
 
 type Unit = 'kg' | 'lb';
 type Theme = 'light' | 'dark';
@@ -10,7 +10,7 @@ type SettingType = 'dropdown' | 'checkbox' | 'text';
 
 type AppSettings = { id: 'settings'; unit: Unit; theme: Theme };
 type BackupSnapshot = { id?: number; name: string; reason: string; createdAt: string; payload: any };
-type Exercise = { id?: number; name: string; muscle: string; secondaryMuscles?: string[]; equipment: string; notes?: string; createdAt: string };
+type Exercise = { id?: number; name: string; muscle: string; secondaryMuscles?: string[]; equipment: string; notes?: string; favourite?: boolean; createdAt: string };
 type MachineSetting = { id: string; label: string; type: SettingType; options?: string[]; defaultValue?: string | boolean };
 type Subtype = { id?: number; exerciseId: number; name: string; defaultUnit: Unit; photo?: Blob; settings: MachineSetting[]; createdAt: string };
 type Routine = { id?: number; name: string; color: string; archived?: boolean; createdAt: string };
@@ -1110,15 +1110,13 @@ export default function App() {
       {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage}} />}
       {page==='history' && <HistoryPage data={{exercises,subtypes,routines,workouts,sets}} />}
       {page==='nutrition' && <NutritionPage />}
-      {page==='progress' && <ProgressPage data={{settings,exercises,subtypes,workouts,sets}} />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
       {page==='stats' && <StatsPage data={{settings,exercises,workouts,sets}} />}
       {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
     </main>
-    <nav className="tabs sixTabs premiumTabs">
+    <nav className="tabs fiveTabs premiumTabs">
       <Tab p="home" page={page} setPage={setPage} icon={<Home/>} label="Home"/>
-      <Tab p="log" page={page} setPage={setPage} icon={<Play/>} label="Workout"/>
       <Tab p="calendar" page={page} setPage={setPage} icon={<CalendarDays/>} label="Calendar"/>
       <Tab p="history" page={page} setPage={setPage} icon={<ListChecks/>} label="History"/>
       <Tab p="nutrition" page={page} setPage={setPage} icon={<Apple/>} label="Nutrition"/>
@@ -1532,6 +1530,13 @@ async function quickCreateExercise(name:string, muscle:string, secondaryMuscles:
   return await db.exercises.add({name:name.trim(),muscle,secondaryMuscles,equipment:equip,createdAt:now()});
 }
 
+
+async function toggleFavouriteExercise(ex:Exercise, refresh:()=>void) {
+  if(!ex.id) return;
+  await db.exercises.update(ex.id, {favourite: !ex.favourite});
+  refresh();
+}
+
 function ExercisesPage({data}:any){
   const {exercises,subtypes,sets,refresh,setPage,setSelectedExerciseId,routines,routineExercises}=data;
   const [name,setName]=useState(''); const [muscle,setMuscle]=useState('Side Delt'); const [secondary,setSecondary]=useState<string[]>([]); const [equip,setEquip]=useState('Machine');
@@ -1596,9 +1601,9 @@ function ExercisesPage({data}:any){
           <div onClick={()=>{setSelectedExerciseId(ex.id); setPage('exerciseDetail')}} className="tapArea">
             <h3>{ex.name}</h3>
             <MusclePills ex={ex}/>
-            <Pills><span>{subtypes.filter((s:Subtype)=>s.exerciseId===ex.id).length} machines</span>{prs&&<span>{prs.setCount} sets logged</span>}</Pills>
+            <Pills>{ex.favourite&&<span>★ Favourite</span>}<span>{subtypes.filter((s:Subtype)=>s.exerciseId===ex.id).length} machines</span>{prs&&<span>{prs.setCount} sets logged</span>}</Pills>
           </div>
-          <div className="iconStack"><button className="smallAction" onClick={()=>beginEdit(ex)}>Edit</button><button className="trash" onClick={()=>del(ex)}><Trash2/></button></div>
+          <div className="iconStack"><button className={ex.favourite?'favBtn active':'favBtn'} onClick={()=>toggleFavouriteExercise(ex,refresh)} title="Favourite for stats"><Star size={18}/></button><button className="smallAction" onClick={()=>beginEdit(ex)}>Edit</button><button className="trash" onClick={()=>del(ex)}><Trash2/></button></div>
         </div>
         {prs && <div className="quickPRs"><span>Heaviest {Math.round(kgValue(prs.heaviest)*10)/10}kg</span><span>Best e1RM {e1rm(kgValue(prs.bestE1RM), prs.bestE1RM.reps)}kg</span></div>}
       </div>}
@@ -1717,7 +1722,6 @@ function dateKey(date: Date) {
 
 function LogPage({data}:any){
   const {settings,exercises,subtypes,routines,routineExercises,workouts,sets,activeWorkout,setActiveWorkoutId,refresh}=data;
-  const [routineId,setRoutineId]=useState<number|undefined>(); 
   const [timer,setTimer]=useState<number|undefined>(); 
   const [rest,setRest]=useState(90); 
   const [,setTick]=useState(0);
@@ -1725,30 +1729,57 @@ function LogPage({data}:any){
   const [customItems,setCustomItems]=useState<RoutineExercise[]>([]);
   const [addExerciseId,setAddExerciseId]=useState<number|undefined>();
   const [addSubtypeId,setAddSubtypeId]=useState<number|undefined>();
+  const [quickRoutineName,setQuickRoutineName]=useState('');
 
   useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),1000);return()=>clearInterval(i)},[]);
   useEffect(()=>{ let lock:any; async function requestLock(){ try{ if('wakeLock' in navigator && activeWorkout){ lock = await (navigator as any).wakeLock.request('screen'); } }catch{} } requestLock(); return ()=>{ try{lock?.release?.()}catch{} }; },[activeWorkout?.id]);
 
-  async function start(){ if(!routineId)return alert('Choose routine'); const r=routines.find((x:Routine)=>x.id===routineId); const id=await db.workouts.add({routineId,title:r?.name||'Workout',date:today(),startedAt:now()}); setActiveWorkoutId(id); refresh(); }
-  async function startEmpty(){ const id=await db.workouts.add({title:'Custom Workout',date:today(),startedAt:now()}); setCustomMode(true); setActiveWorkoutId(id); refresh(); }
+  async function startRoutine(routineId:number){ const r=routines.find((x:Routine)=>x.id===routineId); const id=await db.workouts.add({routineId,title:r?.name||'Workout',date:today(),startedAt:now()}); setCustomMode(false); setActiveWorkoutId(id); refresh(); }
+  async function startEmpty(){ const id=await db.workouts.add({title:'New Workout',date:today(),startedAt:now()}); setCustomMode(true); setActiveWorkoutId(id); refresh(); }
+  async function startNewRoutineNow(){
+    const name = quickRoutineName.trim() || `Routine ${new Date().toLocaleDateString([], {day:'numeric',month:'short'})}`;
+    const rid = await db.routines.add({name, color:'#2563eb', archived:false, createdAt:now()});
+    const id=await db.workouts.add({routineId:rid,title:name,date:today(),startedAt:now()});
+    setQuickRoutineName('');
+    setCustomMode(false);
+    setActiveWorkoutId(id);
+    refresh();
+  }
   async function finish(){ 
     if(!activeWorkout?.id)return; 
     await db.workouts.update(activeWorkout.id,{endedAt:now()}); 
-    if(customMode && customItems.length && confirm('Save this custom workout as a new routine?')){
-      const name = prompt('Routine name?', 'Custom Routine') || 'Custom Routine';
+    if(customMode && customItems.length && confirm('Save this as a reusable routine?')){
+      const name = prompt('Routine name?', activeWorkout.title || 'Custom Routine') || 'Custom Routine';
       const rid = await db.routines.add({name, color:'#2563eb', archived:false, createdAt:now()});
       for (const item of customItems) await db.routineExercises.add({...item, id:undefined, routineId:rid, createdAt:now()});
     }
     setActiveWorkoutId(undefined); setCustomItems([]); setCustomMode(false); refresh(); 
   }
-  function addCustomExercise(){
+  async function addCustomExercise(){
     if(!addExerciseId) return alert('Choose exercise');
-    const item:RoutineExercise = {id:Date.now(), routineId:0, exerciseId:addExerciseId, subtypeId:addSubtypeId, order:customItems.length+1, sets:3, reps:'8-12', rest:90, createdAt:now()};
-    setCustomItems([...customItems,item]);
+    const nextOrder = customMode || !activeWorkout?.routineId 
+      ? customItems.length+1 
+      : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
+    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId:addSubtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
+    if(activeWorkout?.routineId && !customMode){
+      await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
+      refresh();
+    } else {
+      setCustomItems([...customItems,item]);
+    }
     setAddExerciseId(undefined); setAddSubtypeId(undefined);
   }
-  if(!activeWorkout) return <section>
-    <Card><h3>Start Workout</h3><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select><button className="primary" onClick={start}>Start Routine</button><button className="secondary" onClick={startEmpty}>Start Empty Workout</button></Card>
+
+  if(!activeWorkout) return <section className="trainStart">
+    <Card cls="hero trainHero"><h2>Start Training</h2><p>No setup maze. Start a fresh workout, create a new routine on the spot, or tap an existing routine to begin immediately.</p></Card>
+    <Card cls="startActions">
+      <button className="primary bigStart" onClick={startEmpty}>Start New Workout</button>
+      <div className="quickRoutineCreate">
+        <input value={quickRoutineName} onChange={e=>setQuickRoutineName(e.target.value)} placeholder="Optional new routine name"/>
+        <button className="secondary" onClick={startNewRoutineNow}>Start + Save as Routine</button>
+      </div>
+    </Card>
+    <Card><h3>Existing routines</h3><div className="routineStartGrid">{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><button key={r.id} className="routineStartCard" onClick={()=>startRoutine(r.id!)}><span style={{background:r.color}}/><strong>{r.name}</strong><em>Tap to start</em></button>)}</div></Card>
     <Card><h3>Timeout protection</h3><p className="muted">Sets save immediately. If the page refreshes, LiftLog will try to resume your unfinished workout. During workouts, screen wake lock is requested where your browser supports it.</p></Card>
   </section>;
   const routineItems=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
@@ -1758,10 +1789,11 @@ function LogPage({data}:any){
   return <section className="workoutV15">
     <Card cls="workoutHeaderSticky"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div></Card>
     <div className="floatingTimer smartTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Reset</button><button onClick={()=>setTimer((timer||Date.now())-15000)}>+15</button></div>
-    <Card cls="addExercisePanel"><h3>Add exercise during workout</h3><ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(undefined)}} placeholder="Search exercise to add..." /><select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional subtype</option>{subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="secondary" onClick={addCustomExercise}>+ Add Exercise</button></Card>
+    <Card cls="addExercisePanel"><h3>Add exercise or variant</h3><p className="muted">Add exercises while training. If this workout is based on a routine, new exercises are added to that routine template too.</p><ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(undefined)}} placeholder="Search exercise to add..." /><select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional variant / machine</option>{subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><button className="secondary" onClick={addCustomExercise}>+ Add to Workout</button></Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; return <Logger key={it.id} item={it} ex={ex} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===ex?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} onSave={()=>setTimer(Date.now())}/> })}
   </section>
 }
+
 function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Workout, workouts:Workout[], sets:WorkoutSet[]){
   const past=workouts.filter(w=>w.id!==workout.id&&w.date<workout.date).sort((a: Workout, b: Workout)=>b.date.localeCompare(a.date));
   for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a: WorkoutSet, b: WorkoutSet)=>a.setNumber-b.setNumber); if(found.length)return found}
@@ -1788,7 +1820,8 @@ function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUn
   return <Card cls="loggerV15">
     <details open>
       <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{subtype?.name||'No subtype selected'}</p></div></div></summary>
-      <div className="grid2"><label>Subtype<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No subtype</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></label></div>
+      <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>
+      <div className="rirExplainer"><strong>RIR</strong> = reps in reserve. Example: RIR 2 means you could have done about 2 more reps.</div>
       {prMessage && <div className="prToastInline">{prMessage}</div>}
       <div className="setTableV15">
         <div className="setHeaderV15"><span>Set</span><span>Previous</span><span>Weight</span><span>Reps</span><span>RIR</span><span></span></div>
@@ -1797,7 +1830,7 @@ function Logger({item,ex,subtypes,initialSubtype,workout,workouts,sets,defaultUn
           const pw=p?Math.round(convert(p.weight,p.unit,unit)*10)/10:undefined;
           return <div className={saved?'setLineV15 completedSet':'setLineV15'} key={n}>
             <strong>{n}</strong><small>{p?`${pw}${unit} × ${p.reps}`:'—'}</small>
-            <input id={`w-${item.id}-${n}`} defaultValue={saved?String(saved.weight):(pw?String(pw):'')} placeholder="kg" type="number" step=".5"/>
+            <input id={`w-${item.id}-${n}`} defaultValue={saved?String(saved.weight):(pw?String(pw):'')} placeholder={unit} type="number" step=".5"/>
             <input id={`r-${item.id}-${n}`} defaultValue={saved?String(saved.reps):(p?String(p.reps):'')} placeholder="reps" type="number"/>
             <input id={`rir-${item.id}-${n}`} defaultValue={saved?.rir!==undefined?String(saved.rir):''} placeholder="RIR" type="number" step=".5"/>
             <button onClick={()=>save(n)}>{saved?'✓':'Save'}</button>
@@ -1855,13 +1888,41 @@ function CalendarPage({data}:any){
     </div>
   </section>
 }
+
+function ProgressLineChart({points,unit,label}:{points:{date:string;value:number}[];unit:string;label:string}) {
+  if(points.length < 2) return <p className="muted">Log at least two sessions to show a graph.</p>;
+  const w=320, h=150, pad=24;
+  const vals=points.map(p=>p.value);
+  const min=Math.min(...vals), max=Math.max(...vals);
+  const range=Math.max(1,max-min);
+  const coords=points.map((p,i)=>{
+    const x=pad + (i/(points.length-1))*(w-pad*2);
+    const y=h-pad - ((p.value-min)/range)*(h-pad*2);
+    return `${x},${y}`;
+  }).join(' ');
+  return <div className="progressChart">
+    <div className="chartTop"><strong>{label}</strong><span>{Math.round(points[points.length-1].value*10)/10}{unit}</span></div>
+    <svg viewBox={`0 0 ${w} ${h}`} role="img">
+      <polyline points={coords} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+      {points.map((p,i)=>{ const x=pad + (i/(points.length-1))*(w-pad*2); const y=h-pad - ((p.value-min)/range)*(h-pad*2); return <circle key={i} cx={x} cy={y} r="4" fill="currentColor"/> })}
+    </svg>
+  </div>
+}
+
 function StatsPage({data}:any){
   const {settings,exercises,workouts,sets}=data;
-  const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);
-  const filtered=sets.filter((s:WorkoutSet)=>s.exerciseId===eid);
+  const favouriteExercises = exercises.filter((e:Exercise)=>e.favourite);
+  const graphExercises = favouriteExercises.length ? favouriteExercises : exercises;
+  const [showOnlyFavourites,setShowOnlyFavourites]=useState(true);
+  const availableExercises = showOnlyFavourites && favouriteExercises.length ? favouriteExercises : exercises;
+  const [eid,setEid]=useState<number|undefined>(availableExercises[0]?.id || exercises[0]?.id);
+  const selectedExercise = exercises.find((e:Exercise)=>e.id===eid);
+  const filtered=sets.filter((s:WorkoutSet)=>s.exerciseId===eid).sort((a:WorkoutSet,b:WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
   const weeklyVolumes = weeklyVolumeByBucket(exercises, workouts, sets);
   const totalWeeklyVolume = Object.values(weeklyVolumes).reduce((a,b)=>a+b,0);
   const maxVolume = Math.max(...Object.values(weeklyVolumes), 1);
+  const points = filtered.map((s:WorkoutSet)=>({date:s.createdAt.slice(0,10), value:e1rm(convert(s.weight,s.unit,settings.unit),s.reps)})).slice(-12);
+  const weightPoints = filtered.map((s:WorkoutSet)=>({date:s.createdAt.slice(0,10), value:convert(s.weight,s.unit,settings.unit)})).slice(-12);
 
   return <section>
     <Card>
@@ -1881,13 +1942,19 @@ function StatsPage({data}:any){
     </Card>
 
     <Card>
-      <h3>Exercise Progress</h3>
-      <select value={eid??''} onChange={e=>setEid(Number(e.target.value))}>
-        {exercises.map((e:Exercise)=><option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
-      {filtered.length ? filtered.slice(-12).map((s:WorkoutSet)=>
+      <h3>Exercise Progression Graphs</h3>
+      <div className="favStatsHeader">
+        <label className="checkLine"><input type="checkbox" checked={showOnlyFavourites} onChange={e=>{setShowOnlyFavourites(e.target.checked); const list=e.target.checked&&favouriteExercises.length?favouriteExercises:exercises; setEid(list[0]?.id);}}/> Show favourites only</label>
+        <span>{favouriteExercises.length} favourites</span>
+      </div>
+      {favouriteExercises.length===0 && <p className="muted">No favourites yet. Star exercises in the Exercise Library to make this list cleaner.</p>}
+      <ExerciseSearchSelect exercises={availableExercises} value={eid} onChange={setEid} placeholder="Search favourite exercise to graph..."/>
+      {selectedExercise && <div className={selectedExercise.favourite?'favStatsButton active':'favStatsButton'}>{selectedExercise.favourite?'★ Favourite exercise':'☆ Not favourited'}</div>}
+      <ProgressLineChart points={points} unit={settings.unit} label="Estimated 1RM trend"/>
+      <ProgressLineChart points={weightPoints} unit={settings.unit} label="Logged weight trend"/>
+      {filtered.length ? filtered.slice(-8).reverse().map((s:WorkoutSet)=>
         <div className="prev" key={s.id}>
-          Set {s.setNumber}: {Math.round(convert(s.weight,s.unit,settings.unit)*10)/10}{settings.unit} × {s.reps} · e1RM {e1rm(convert(s.weight,s.unit,settings.unit),s.reps)}{settings.unit}
+          {new Date(s.createdAt).toLocaleDateString([], {day:'numeric',month:'short'})} · Set {s.setNumber}: {Math.round(convert(s.weight,s.unit,settings.unit)*10)/10}{settings.unit} × {s.reps} · e1RM {e1rm(convert(s.weight,s.unit,settings.unit),s.reps)}{settings.unit}
         </div>
       ) : <p className="muted">No sets logged for this exercise yet.</p>}
     </Card>
@@ -2088,16 +2155,16 @@ function NutritionPage(){
 function MorePage({data}:any){
   const {setPage, exercises, subtypes, routines}=data;
   const items = [
-    {title:'Exercises', subtitle:`${exercises.length} saved`, page:'exercises'},
-    {title:'Machine Subtypes', subtitle:`${subtypes.length} saved`, page:'subtypes'},
-    {title:'Routines', subtitle:`${routines.length} templates`, page:'routines'},
-    {title:'Stats', subtitle:'Spider chart and weekly volume', page:'stats'},
-    {title:'Nutrition', subtitle:'Water, creatine, caffeine and meals', page:'nutrition'},
+    {title:'Start Training', subtitle:'Open the streamlined workout flow', page:'log'},
+    {title:'Training Studio', subtitle:'Build exercises, machines and routines', page:'routines'},
+    {title:'Exercise Library', subtitle:`${exercises.length} exercises · ${exercises.filter((e:Exercise)=>e.favourite).length} favourites`, page:'exercises'},
+    {title:'Machine Library', subtitle:`${subtypes.length} machine variants`, page:'subtypes'},
+    {title:'Stats + Graphs', subtitle:'Progression charts and weekly volume', page:'stats'},
     {title:'Backups', subtitle:'Export, import and restore points', page:'backup'},
     {title:'Settings', subtitle:'Theme, unit and local data', page:'settings'}
   ];
   return <section>
-    <Card cls="hero"><h2>More</h2><p>Manage your exercises, machines, routines, backups and settings.</p></Card>
+    <Card cls="hero"><h2>More</h2><p>Keep setup tools here so the main app stays focused on training, nutrition and history.</p></Card>
     <div className="moreGrid">
       {items.map(item=><button key={item.title} className="moreItem" onClick={()=>setPage(item.page as Page)}>
         <strong>{item.title}</strong>
@@ -2305,6 +2372,7 @@ function BackupPage({data}:any){
 function HistoryPage({data}:any){
   const {exercises,routines,workouts,sets}=data;
   const [selectedId,setSelectedId]=useState<number|undefined>();
+  const nutritionLogs:Record<string,DailyNutritionLog> = loadNutritionLogs();
   const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
   const selected = completed.find((w:Workout)=>w.id===selectedId);
 
@@ -2320,31 +2388,28 @@ function HistoryPage({data}:any){
     </section>
   }
 
+  const dayKeys = Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs)])).sort((a,b)=>b.localeCompare(a)).slice(0,30);
+  const totalVol7 = completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).reduce((a,w)=>a+workoutVolume(w,sets),0);
+  const nutritionDays7 = Object.keys(nutritionLogs).filter(d=>new Date(d)>=new Date(Date.now()-7*86400000)).length;
+  const meals7 = Object.entries(nutritionLogs).filter(([d])=>new Date(d)>=new Date(Date.now()-7*86400000)).reduce((a,[,n])=>a+(n.meals?.length||0),0);
+
   return <section>
-    <Card cls="hero heroV12"><h2>Workout History</h2><p>Review your completed sessions, volume, duration and exercises.</p></Card>
-    {completed.length ? completed.map((w:Workout)=>{
-      const routine = routines.find((r:Routine)=>r.id===w.routineId);
-      const ss = workoutSetsFor(w, sets);
-      return <Card key={w.id} cls="historyCard" onClick={()=>setSelectedId(w.id)}>
-        <div className="historyAccent" style={{background:routine?.color||'#2563eb'}}/>
-        <div><h3>{w.title}</h3><p>{new Date(w.date).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'})}</p></div>
-        <div className="historyStats"><strong>{fmtVol(workoutVolume(w,sets))}</strong><span>{ss.length} sets · {durationMinutes(w)} min</span></div>
+    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place.</p></Card>
+    <div className="historySummaryGrid">
+      <Card><span className="eyebrow">7-day volume</span><h3>{fmtVol(totalVol7)}</h3></Card>
+      <Card><span className="eyebrow">Workouts</span><h3>{completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).length}</h3></Card>
+      <Card><span className="eyebrow">Nutrition days</span><h3>{nutritionDays7}</h3></Card>
+      <Card><span className="eyebrow">Meals logged</span><h3>{meals7}</h3></Card>
+    </div>
+    {dayKeys.length ? dayKeys.map(day=>{
+      const dayWorkouts=completed.filter((w:Workout)=>w.date===day);
+      const n=nutritionLogs[day] ? normaliseNutritionDay(nutritionLogs[day]) : undefined;
+      return <Card key={day} cls="combinedDayCard">
+        <h3>{new Date(day).toLocaleDateString([], {weekday:'long', day:'numeric', month:'short'})}</h3>
+        {dayWorkouts.map((w:Workout)=>{ const routine=routines.find((r:Routine)=>r.id===w.routineId); const ss=workoutSetsFor(w,sets); return <button className="combinedWorkoutRow" key={w.id} onClick={()=>setSelectedId(w.id)}><span style={{background:routine?.color||'#2563eb'}}/><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(workoutVolume(w,sets))} · {durationMinutes(w)} min</em></button> })}
+        {n ? <div className="combinedNutritionRow"><strong>Nutrition</strong><span>{n.waterMl}ml water · {n.meals.length} meals · {(n.proteinServings??0)}/{n.proteinTarget??3} protein · {n.creatineTaken?'creatine ✓':'creatine ○'}</span></div> : <p className="muted">No nutrition logged.</p>}
       </Card>
-    }) : <Card><p className="muted">No completed workouts yet.</p></Card>}
+    }) : <Card><p className="muted">No history yet.</p></Card>}
   </section>
 }
 
-function ProgressPage({data}:any){
-  const {settings,exercises,subtypes,workouts,sets}=data;
-  const [eid,setEid]=useState<number|undefined>(exercises[0]?.id);
-  const [sid,setSid]=useState<number|undefined>();
-  const filtered = sets.filter((s:WorkoutSet)=>s.exerciseId===eid && (!sid || s.subtypeId===sid)).sort((a: WorkoutSet, b: WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
-  const recent = filtered.slice(-12);
-  const maxWeight = Math.max(...recent.map((s:WorkoutSet)=>convert(s.weight,s.unit,settings.unit)),1);
-  const maxVol = Math.max(...recent.map((s:WorkoutSet)=>volumeKg(s)),1);
-  return <section>
-    <Card><h3>Progress charts</h3><select value={eid??''} onChange={e=>{setEid(Number(e.target.value));setSid(undefined)}}>{exercises.map((e:Exercise)=><option key={e.id} value={e.id}>{e.name}</option>)}</select><select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">All subtypes</option>{subtypes.filter((s:Subtype)=>s.exerciseId===eid).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Card>
-    <Card><h3>Weight trend</h3>{recent.length?recent.map((s:WorkoutSet,i:number)=><div className="trendRow" key={s.id}><span>#{i+1}</span><div><b style={{width:`${(convert(s.weight,s.unit,settings.unit)/maxWeight)*100}%`}}/></div><em>{Math.round(convert(s.weight,s.unit,settings.unit)*10)/10}{settings.unit} × {s.reps}</em></div>):<p className="muted">No data yet.</p>}</Card>
-    <Card><h3>Volume trend</h3>{recent.length?recent.map((s:WorkoutSet,i:number)=><div className="trendRow" key={s.id}><span>#{i+1}</span><div><b style={{width:`${(volumeKg(s)/maxVol)*100}%`}}/></div><em>{fmtVol(volumeKg(s))}</em></div>):<p className="muted">No data yet.</p>}</Card>
-  </section>
-}
