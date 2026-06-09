@@ -1805,6 +1805,7 @@ function LogPage({data}:any){
   const [customMode,setCustomMode]=useState(false);
   const [customItems,setCustomItems]=useState<RoutineExercise[]>([]);
   const [finishSummary,setFinishSummary]=useState<any>();
+  const [focusedItemId,setFocusedItemId]=useState<number|undefined>();
   const [addExerciseId,setAddExerciseId]=useState<number|undefined>();
   const [addSubtypeId,setAddSubtypeId]=useState<number|undefined>();
   const [newVariantName,setNewVariantName]=useState('');
@@ -1892,11 +1893,18 @@ function LogPage({data}:any){
   const routineItems=routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
   const items=customMode || !activeWorkout.routineId ? customItems : routineItems;
   const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
-  const completedSets = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).length;
+  const completedSets = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>`${s.exerciseId}-${s.subtypeId||0}-${s.setNumber}`)).size;
   const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
   const progressPct = Math.min(100, Math.round((completedSets/targetSets)*100));
   const completedExerciseIds = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>s.exerciseId));
   const completedExercises = items.filter((it:RoutineExercise)=>completedExerciseIds.has(it.exerciseId)).length;
+  const firstIncompleteItem = items.find((it:RoutineExercise)=>{
+    const doneForItem = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id&&s.exerciseId===it.exerciseId).length;
+    return doneForItem < it.sets;
+  });
+  useEffect(()=>{
+    if(activeWorkout && items.length && !focusedItemId) setFocusedItemId(firstIncompleteItem?.id || items[0]?.id);
+  },[activeWorkout?.id, items.length]);
 
   return <section className="workoutV15">
     <Card cls="workoutHeaderSticky mobileWorkoutHeader"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div>
@@ -1928,7 +1936,7 @@ function LogPage({data}:any){
     </Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; const rep=replacements.find((r:WorkoutReplacement)=>r.workoutId===activeWorkout.id&&r.routineExerciseId===it.id);
       const actualEx=rep ? exercises.find((e:Exercise)=>e.id===rep.replacementExerciseId) || ex : ex;
-      return <Logger key={it.id} item={it} originalEx={ex} ex={actualEx} replacement={rep} allExercises={exercises} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===actualEx?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} onSave={()=>setTimer(Date.now())}/> })}
+      return <Logger key={it.id} item={it} originalEx={ex} ex={actualEx} replacement={rep} allExercises={exercises} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===actualEx?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} isFocused={focusedItemId===it.id} onFocusItem={()=>setFocusedItemId(it.id)} onCompleteExercise={()=>{ const idx=items.findIndex((x:RoutineExercise)=>x.id===it.id); const next=items[idx+1]; if(next){setFocusedItemId(next.id); setTimeout(()=>document.getElementById(`logger-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'start'}),160);} }} onSave={()=>setTimer(Date.now())}/> })}
   </section>
 }
 
@@ -1937,12 +1945,13 @@ function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Wor
   for(const w of past){const found=sets.filter(s=>s.workoutId===w.id&&s.exerciseId===exerciseId&&(subtypeId?s.subtypeId===subtypeId:true)).sort((a: WorkoutSet, b: WorkoutSet)=>a.setNumber-b.setNumber); if(found.length)return found}
   return [];
 }
-function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave}:any){
+function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave,isFocused,onFocusItem,onCompleteExercise}:any){
   const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
-  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState('');
+  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false);
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
   const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
+  const exerciseComplete = todaySets.length >= item.sets;
 
   function targetForSet(n:number){
     const p=prev.find((x:WorkoutSet)=>x.setNumber===n);
@@ -1973,19 +1982,36 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
     if(replacement?.id){ await db.replacements.delete(replacement.id); refresh(); }
   }
   async function save(n:number){
-    const w=(document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement).value; 
-    const r=(document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement).value; 
-    const rir=(document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement).value; 
-    if(!r)return alert('Enter reps'); 
-    const newRecord: WorkoutSet = {workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:now()};
-    const id = await db.sets.add(newRecord);
-    const pr = detectSetPR({...newRecord,id}, sets);
-    if(pr){ setPrMessage(`🏆 ${pr}`); haptic([30,40,60]); } else haptic(8);
-    onSave(); refresh();
+    if(savingSet===n) return;
+    setSavingSet(n);
+    try{
+      const w=(document.getElementById(`w-${item.id}-${n}`) as HTMLInputElement).value; 
+      const r=(document.getElementById(`r-${item.id}-${n}`) as HTMLInputElement).value; 
+      const rir=(document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement).value; 
+      if(!r){ alert('Enter reps'); return; }
+      const existing=todaySets.find((s:WorkoutSet)=>s.setNumber===n);
+      const newRecord: WorkoutSet = {workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:existing?.createdAt||now()};
+      let id=existing?.id;
+      if(existing?.id) await db.sets.update(existing.id,newRecord);
+      else id = await db.sets.add(newRecord);
+      const pr = existing ? undefined : detectSetPR({...newRecord,id}, sets);
+      if(pr){ setPrMessage(`🏆 ${pr}`); haptic([30,40,60]); } else haptic(8);
+      const projectedCount = existing ? todaySets.length : todaySets.length + 1;
+      if(projectedCount >= item.sets){
+        setJustCompleted(true);
+        setTimeout(()=>setJustCompleted(false),900);
+        setTimeout(()=>onCompleteExercise?.(),520);
+      }
+      onSave(); refresh();
+    } finally {
+      setTimeout(()=>setSavingSet(undefined),250);
+    }
   }
-  return <Card cls="loggerV15">
-    <details open className={todaySets.length>=item.sets?"exerciseCompleteDetails":""}>
+  return <Card cls={`loggerV15 workoutLogger ${isFocused?"focusedLogger":""} ${exerciseComplete?"completeLogger":""}`} >
+    <details id={`logger-${item.id}`} open={isFocused || !exerciseComplete} className={exerciseComplete?"exerciseCompleteDetails":""} onToggle={onFocusItem}>
       <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{replacement?`Replaces ${originalEx?.name} today`:(subtype?.name||'No subtype selected')}</p></div></div></summary>
+      {justCompleted&&<div className="completeBurst">✓ Exercise Complete</div>}
+      {exerciseComplete&&<div className="compactCompleteRow">✓ {ex.name} · {todaySets.length} sets complete</div>}
       <div className="swapPanel">
         <button className="secondary mini" onClick={()=>setSwapOpen(!swapOpen)}>Replace Exercise Today</button>
         {replacement&&<button className="secondary mini" onClick={clearSwap}>Use original</button>}
@@ -2011,7 +2037,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
             <input id={`w-${item.id}-${n}`} onFocus={()=>setActiveInput({set:n,field:'weight'})} defaultValue={saved?String(saved.weight):(pw?String(pw):'')} placeholder={unit} type="number" inputMode="decimal" enterKeyHint="next" step=".5"/>
             <input id={`r-${item.id}-${n}`} onFocus={()=>setActiveInput({set:n,field:'reps'})} defaultValue={saved?String(saved.reps):(p?String(p.reps):'')} placeholder="reps" type="number" inputMode="numeric" enterKeyHint="next"/>
             <input id={`rir-${item.id}-${n}`} onFocus={()=>setActiveInput({set:n,field:'rir'})} defaultValue={saved?.rir!==undefined?String(saved.rir):''} placeholder="RIR" type="number" inputMode="decimal" enterKeyHint="done" step=".5"/>
-            <button onClick={()=>save(n)}>{saved?'✓':'Save'}</button>
+            <button disabled={savingSet===n} onClick={()=>save(n)}>{savingSet===n?'...':saved?'✓':'Save'}</button>
           </div>
         })}
       </div>

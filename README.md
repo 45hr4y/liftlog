@@ -319,3 +319,15 @@ Added:
 - Removed old heatmap legend.
 - Added floating action button.
 - Added completion animations.
+
+
+## v33 Workout Animations + Set Save Safety
+
+Added:
+- Save button now guards against double taps.
+- Saving an existing set updates that set instead of creating duplicates.
+- Workout progress now counts unique completed sets.
+- Exercise complete banner.
+- Completed exercise collapse styling.
+- Auto-focus/scroll toward the next exercise after completion.
+- PR banner and set-complete animation polish.

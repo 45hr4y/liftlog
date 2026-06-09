@@ -1527,3 +1527,86 @@ body[data-theme="dark"] .onboardingSteps span{background:#1e293b;color:#cbd5e1}
 .exerciseCardPro{animation:softPop .18s ease both}.completedSet{animation:setComplete .22s ease both}@keyframes softPop{from{opacity:.65;transform:translateY(4px)}to{opacity:1;transform:none}}@keyframes setComplete{0%{transform:scale(.99)}60%{transform:scale(1.01)}100%{transform:scale(1)}}
 body[data-theme="dark"] .finishStats div{background:#020617}body[data-theme="dark"] .machineTagsInline span{background:#78350f;color:#fde68a}
 @media(max-width:720px){.tagComposer{grid-template-columns:1fr}.finishStats{grid-template-columns:1fr 1fr}.floatingFab{bottom:82px;right:14px}.floatingFab>button{width:54px;height:54px}}
+
+
+/* LiftLog v33 Workout Animations + Save Safety */
+.workoutLogger{
+  transition:transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.focusedLogger{
+  border-color:#93c5fd!important;
+  box-shadow:0 18px 44px rgba(37,99,235,.12)!important;
+}
+.completeLogger{
+  opacity:.86;
+}
+.exerciseCompleteDetails:not([open]){
+  animation:collapseDone .28s ease both;
+}
+.compactCompleteRow{
+  margin:10px 0;
+  border-radius:16px;
+  padding:10px 12px;
+  background:#dcfce7;
+  color:#166534;
+  font-weight:950;
+  animation:softPop .22s ease both;
+}
+.completeBurst{
+  position:sticky;
+  top:78px;
+  z-index:30;
+  margin:10px 0;
+  border-radius:18px;
+  padding:13px 14px;
+  background:linear-gradient(135deg,#22c55e,#2563eb);
+  color:white;
+  font-weight:950;
+  text-align:center;
+  box-shadow:0 16px 36px rgba(34,197,94,.24);
+  animation:completeBurst .88s ease both;
+}
+.setLineV15.completedSet{
+  position:relative;
+  overflow:hidden;
+}
+.setLineV15.completedSet:after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,transparent,rgba(34,197,94,.12),transparent);
+  transform:translateX(-100%);
+  animation:setShimmer .55s ease both;
+  pointer-events:none;
+}
+.setLineV15 button:disabled{
+  opacity:.55;
+}
+.prToastInline{
+  animation:prSlide .28s ease both;
+}
+@keyframes collapseDone{
+  from{transform:scale(1);opacity:1}
+  to{transform:scale(.985);opacity:.82}
+}
+@keyframes completeBurst{
+  0%{transform:translateY(8px) scale(.96);opacity:0}
+  18%{transform:translateY(0) scale(1.02);opacity:1}
+  70%{transform:translateY(0) scale(1);opacity:1}
+  100%{transform:translateY(-4px) scale(.98);opacity:0}
+}
+@keyframes setShimmer{
+  to{transform:translateX(100%)}
+}
+@keyframes prSlide{
+  from{transform:translateY(-6px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+@media(max-width:720px){
+  .completeBurst{
+    top:84px;
+  }
+  .completeLogger:not(.focusedLogger){
+    transform:scale(.995);
+  }
+}
