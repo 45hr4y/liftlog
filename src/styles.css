@@ -1696,3 +1696,26 @@ body[data-theme="dark"] .finishStats div{background:#020617}body[data-theme="dar
     scroll-margin-top:170px;
   }
 }
+
+
+/* LiftLog v36 Finish + FAB Fix */
+.finishReportCard .warningText{
+  margin:8px 0;
+}
+.floatingFab{
+  right:18px!important;
+  bottom:calc(110px + env(safe-area-inset-bottom))!important;
+}
+.workoutV15 .floatingFab,
+body:has(.workoutV15) .floatingFab{
+  display:none!important;
+}
+.finishReport{
+  padding-bottom:110px;
+}
+@media(max-width:720px){
+  .floatingFab{
+    right:16px!important;
+    bottom:calc(118px + env(safe-area-inset-bottom))!important;
+  }
+}

@@ -347,3 +347,12 @@ Fixed:
 - Completion banner is now inline-only, not sticky.
 - Added safe scroll margin under the workout header.
 - Auto-scroll to next exercise now centers the next card instead of pushing it underneath the header.
+
+
+## v36 Finish + FAB Fix
+
+Fixed:
+- Finishing a workout with unfinished planned sets no longer blanks the app.
+- Finish summary now safely handles incomplete/missing workout data.
+- Finish report shows how many planned sets were left incomplete.
+- Floating + button is hidden during active workouts so it no longer clashes with the timer controls.

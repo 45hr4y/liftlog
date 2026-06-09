@@ -1,4 +1,7 @@
 
+function safeNumber(x:any, fallback=0){ const n=Number(x); return Number.isFinite(n)?n:fallback; }
+function safeText(x:any, fallback=''){ return typeof x==='string' && x.trim()?x:fallback; }
+
 function safeArray<T>(x:T[]|undefined|null):T[]{ return Array.isArray(x)?x:[]; }
 
 function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
@@ -1126,7 +1129,7 @@ export default function App() {
       {page==='backup' && <BackupPage data={{refresh}} />}
       {page==='settings' && <SettingsPage data={{settings,refresh}} />}
     </main>
-    <div className="floatingFab"><button onClick={()=>setPage('log')}>＋</button><div><button onClick={()=>setPage('log')}>Start</button><button onClick={()=>setPage('routines')}>Routine</button><button onClick={()=>setPage('exercises')}>Exercise</button></div></div>
+    {!activeWorkout && <div className="floatingFab"><button onClick={()=>setPage('log')}>＋</button><div><button onClick={()=>setPage('log')}>Start</button><button onClick={()=>setPage('routines')}>Routine</button><button onClick={()=>setPage('exercises')}>Exercise</button></div></div>}
     <nav className="tabs fiveTabs premiumTabs">
       <Tab p="home" page={page} setPage={setPage} icon={<Home/>} label="Home"/>
       <Tab p="calendar" page={page} setPage={setPage} icon={<CalendarDays/>} label="Calendar"/>
@@ -1832,28 +1835,48 @@ function LogPage({data}:any){
     refresh();
   }
   async function finish(){ 
-    if(!activeWorkout?.id)return; 
-    const endedAt=now();
-    await db.workouts.update(activeWorkout.id,{endedAt});
-    const workoutSets=(sets as WorkoutSet[]).filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id);
-    const muscles=Array.from(new Set(workoutSets.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter((m):m is string=>Boolean(m))));
-    const volume=workoutSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
-    const duration=workoutDurationMinutes({...activeWorkout,endedAt});
-    setFinishSummary({
-      title:activeWorkout.title || 'Workout',
-      volume:Number.isFinite(volume)?volume:0,
-      sets:workoutSets.length,
-      duration:Number.isFinite(duration)?duration:0,
-      muscles,
-      impact:workoutSets.length>24?'High':workoutSets.length>12?'Moderate':'Light'
-    });
-    haptic([40,40,80]); 
-    if(customMode && customItems.length && confirm('Save this as a reusable routine?')){
-      const name = prompt('Routine name?', activeWorkout.title || 'Custom Routine') || 'Custom Routine';
-      const rid = await db.routines.add({name, color:'#2563eb', archived:false, createdAt:now()});
-      for (const item of customItems) await db.routineExercises.add({...item, id:undefined, routineId:rid, createdAt:now()});
+    if(!activeWorkout?.id)return;
+    const endedAt = now();
+    try{
+      const workoutSets = (sets as WorkoutSet[]).filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id);
+      const muscles = Array.from(new Set(workoutSets.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter((m):m is string=>Boolean(m))));
+      const volume = workoutSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
+      const duration = workoutDurationMinutes({...activeWorkout, endedAt});
+      setFinishSummary({
+        title: activeWorkout.title || 'Workout',
+        volume: safeNumber(volume),
+        sets: workoutSets.length,
+        duration: safeNumber(duration),
+        muscles,
+        impact: workoutSets.length>24?'High':workoutSets.length>12?'Moderate':'Light',
+        incomplete: Math.max(0, targetSets - workoutSets.length)
+      });
+      await db.workouts.update(activeWorkout.id,{endedAt});
+      if(customMode && customItems.length && confirm('Save this as a reusable routine?')){
+        const name = prompt('Routine name?', activeWorkout.title || 'Custom Routine') || 'Custom Routine';
+        const rid = await db.routines.add({name, color:'#2563eb', archived:false, createdAt:now()});
+        for (const item of customItems) await db.routineExercises.add({...item, id:undefined, routineId:rid, createdAt:now()});
+      }
+      haptic([40,40,80]);
+    }catch(err){
+      console.error('finish failed', err);
+      try{ await db.workouts.update(activeWorkout.id,{endedAt}); }catch{}
+      setFinishSummary({
+        title: activeWorkout.title || 'Workout',
+        volume:0,
+        sets:0,
+        duration:0,
+        muscles:[],
+        impact:'Light',
+        incomplete:0,
+        error:true
+      });
+    }finally{
+      setActiveWorkoutId(undefined);
+      setCustomItems([]);
+      setCustomMode(false);
+      refresh();
     }
-    setActiveWorkoutId(undefined); setCustomItems([]); setCustomMode(false); refresh(); 
   }
   async function addCustomExercise(){
     if(!addExerciseId) return alert('Choose exercise');
@@ -1887,7 +1910,10 @@ function LogPage({data}:any){
     refresh();
   }
 
-  if(!activeWorkout && finishSummary) return <section className="finishReport"><Card cls="finishReportCard"><div className="finishIcon">✓</div><h2>Workout Complete</h2><p className="muted">{finishSummary.title || 'Workout'}</p><div className="finishStats"><div><span>Volume</span><strong>{fmtVol(Number(finishSummary.volume)||0)}</strong></div><div><span>Sets</span><strong>{Number(finishSummary.sets)||0}</strong></div><div><span>Duration</span><strong>{Number(finishSummary.duration)||0} min</strong></div><div><span>Recovery impact</span><strong>{finishSummary.impact || 'Light'}</strong></div></div>{safeArray<string>(finishSummary.muscles).length?<Pills>{safeArray<string>(finishSummary.muscles).map((m:string)=><span key={m}>{m}</span>)}</Pills>:<p className="muted">No muscle groups recorded for this session.</p>}<button className="primary" onClick={()=>setFinishSummary(undefined)}>Done</button></Card></section>;
+  if(!activeWorkout && finishSummary) {
+    const summaryMuscles = Array.isArray(finishSummary.muscles) ? finishSummary.muscles : [];
+    return <section className="finishReport"><Card cls="finishReportCard"><div className="finishIcon">✓</div><h2>Workout Complete</h2><p className="muted">{safeText(finishSummary.title,'Workout')}</p>{finishSummary.error&&<p className="warningText">Workout was saved, but the summary had missing data.</p>}{safeNumber(finishSummary.incomplete)>0&&<p className="muted">Finished with {safeNumber(finishSummary.incomplete)} planned set{safeNumber(finishSummary.incomplete)===1?'':'s'} left incomplete.</p>}<div className="finishStats"><div><span>Volume</span><strong>{fmtVol(safeNumber(finishSummary.volume))}</strong></div><div><span>Sets</span><strong>{safeNumber(finishSummary.sets)}</strong></div><div><span>Duration</span><strong>{safeNumber(finishSummary.duration)} min</strong></div><div><span>Recovery impact</span><strong>{safeText(finishSummary.impact,'Light')}</strong></div></div>{summaryMuscles.length?<Pills>{summaryMuscles.map((m:string)=><span key={m}>{m}</span>)}</Pills>:<p className="muted">No muscle groups recorded for this session.</p>}<button className="primary" onClick={()=>setFinishSummary(undefined)}>Done</button></Card></section>;
+  }
   if(!activeWorkout) return <section className="trainStart">
     <Card cls="hero trainHero"><h2>Start Training</h2><p>No setup maze. Start a fresh workout, create a new routine on the spot, or tap an existing routine to begin immediately.</p></Card>
     <Card cls="startActions">
