@@ -1859,6 +1859,28 @@ function LogPage({data}:any){
   useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),1000);return()=>clearInterval(i)},[]);
   useEffect(()=>{ let lock:any; async function requestLock(){ try{ if('wakeLock' in navigator && activeWorkout){ lock = await (navigator as any).wakeLock.request('screen'); } }catch{} } requestLock(); return ()=>{ try{lock?.release?.()}catch{} }; },[activeWorkout?.id]);
 
+  const routineItems=(activeWorkout?.routineId ? (routineExercises as RoutineExercise[]).filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId) : []).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=(activeWorkout ? (customMode || !activeWorkout.routineId ? customItems : routineItems) : []).filter((it:RoutineExercise)=>it && it.exerciseId);
+  const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
+  const completedSets = activeWorkout ? new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>`${s.exerciseId}-${s.subtypeId||0}-${s.setNumber}`)).size : 0;
+  const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
+  const progressPct = Math.min(100, Math.round((completedSets/targetSets)*100));
+  const completedExerciseIds = activeWorkout ? new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>s.exerciseId)) : new Set<number>();
+  const completedExercises = items.filter((it:RoutineExercise)=>completedExerciseIds.has(it.exerciseId)).length;
+  const firstIncompleteItem = activeWorkout ? items.find((it:RoutineExercise)=>{
+    const doneForItem = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id&&s.exerciseId===it.exerciseId).length;
+    return doneForItem < it.sets;
+  }) : undefined;
+
+  useEffect(()=>{
+    if(activeWorkout && items.length && !focusedItemId) {
+      setFocusedItemId(firstIncompleteItem?.id || items[0]?.id);
+    }
+    if(!activeWorkout && focusedItemId) {
+      setFocusedItemId(undefined);
+    }
+  },[activeWorkout?.id, items.length, focusedItemId, firstIncompleteItem?.id]);
+
   async function startRoutine(routineId:number){ const r=routines.find((x:Routine)=>x.id===routineId); const id=await db.workouts.add({routineId,title:r?.name||'Workout',date:today(),startedAt:now()}); setCustomMode(false); setActiveWorkoutId(id); refresh(); }
   async function startEmpty(){ const id=await db.workouts.add({title:'New Workout',date:today(),startedAt:now()}); setCustomMode(true); setActiveWorkoutId(id); refresh(); }
   async function startNewRoutineNow(){
@@ -1962,23 +1984,7 @@ function LogPage({data}:any){
     <Card><h3>Existing routines</h3><div className="routineStartGrid">{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><button key={r.id} className="routineStartCard" onClick={()=>startRoutine(r.id!)}><span style={{background:r.color}}/><strong>{r.name}</strong><em>Tap to start</em></button>)}</div></Card>
     <Card><h3>Timeout protection</h3><p className="muted">Sets save immediately. If the page refreshes, LiftLog will try to resume your unfinished workout. During workouts, screen wake lock is requested where your browser supports it.</p></Card>
   </section>;
-  const routineItems=(routineExercises as RoutineExercise[]).filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
-  const items=(customMode || !activeWorkout.routineId ? customItems : routineItems).filter((it:RoutineExercise)=>it && it.exerciseId);
-  const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
-  const completedSets = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>`${s.exerciseId}-${s.subtypeId||0}-${s.setNumber}`)).size;
-  const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
-  const progressPct = Math.min(100, Math.round((completedSets/targetSets)*100));
-  const completedExerciseIds = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>s.exerciseId));
-  const completedExercises = items.filter((it:RoutineExercise)=>completedExerciseIds.has(it.exerciseId)).length;
-  const firstIncompleteItem = items.find((it:RoutineExercise)=>{
-    const doneForItem = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id&&s.exerciseId===it.exerciseId).length;
-    return doneForItem < it.sets;
-  });
-  useEffect(()=>{
-    if(activeWorkout && items.length && !focusedItemId) setFocusedItemId(firstIncompleteItem?.id || items[0]?.id);
-  },[activeWorkout?.id, items.length]);
-
-  return <section className="workoutV15">
+return <section className="workoutV15">
     <Card cls="workoutHeaderSticky mobileWorkoutHeader"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div>
       <div className="routineProgress">
         <div className="progressMeta"><span>{completedSets}/{targetSets} sets</span><span>{completedExercises}/{items.length} exercises</span><strong>{progressPct}%</strong></div>
@@ -2018,10 +2024,17 @@ function previousSets(exerciseId:number, subtypeId:number|undefined, workout:Wor
   return [];
 }
 function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSubtype,workout,workouts,sets,defaultUnit,refresh,onSave,isFocused,onFocusItem,onCompleteExercise}:any){
-  if(!ex || !workout || !item) return <Card cls="loggerV15"><p className="muted">This exercise could not be loaded safely.</p></Card>;
+  const missingLoggerData = !ex || !workout || !item;
+  ex = ex || {id:-1,name:'Missing exercise',muscle:'Unknown',secondaryMuscles:[],equipment:'Unknown',createdAt:now()};
+  workout = workout || {id:-1,title:'Workout',date:today(),startedAt:now()};
+  item = item || {id:-1,routineId:-1,exerciseId:ex.id,order:0,sets:0,reps:'',rest:0,createdAt:now()};
+  subtypes = Array.isArray(subtypes) ? subtypes : [];
+  workouts = Array.isArray(workouts) ? workouts : [];
+  sets = Array.isArray(sets) ? sets : [];
   const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
   const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false);
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
+  if(missingLoggerData) return <Card cls="loggerV15"><p className="muted">This exercise could not be loaded safely.</p></Card>;
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
   const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
   const exerciseComplete = todaySets.length >= item.sets;
