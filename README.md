@@ -266,3 +266,20 @@ Added:
 - Exercise Progression Graphs can show favourites only.
 - Favourite count appears in More.
 - Cleaner stats dropdown when you have many catalogue exercises.
+
+## v25-v27 Combined Upgrade
+- Temporary exercise replacement during workout, without changing the routine.
+- Suggested replacements based on primary/secondary muscles.
+- Recovery readiness chips on Home.
+- Weekly planner has quick move buttons for planned workouts.
+- Workout and nutrition history cards are more detailed.
+
+## v28 Workout Variants + Rest Days + iPhone Inputs
+
+Added:
+- Create machine variants during an active workout.
+- Upload/attach machine images during workout.
+- Newly created variants are saved permanently for future sessions.
+- Newly created variants are immediately added to the current workout.
+- Added Rest days to calendar/planner.
+- Added numeric input hints for iPhone keypad behaviour.

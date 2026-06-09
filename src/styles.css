@@ -1318,3 +1318,65 @@ body[data-theme="dark"] .favBtn.active{
     flex-direction:column;
   }
 }
+
+/* LiftLog v25-27 combined upgrade */
+.swapPanel{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.swapChoices{display:grid;gap:8px;margin:8px 0 12px}.swapChoices button{text-align:left;border:1px solid #e2e8f0;border-radius:14px;padding:10px;background:#f8fafc}.swapChoices button strong{display:block}.swapChoices button span{display:block;color:#64748b;font-size:12px;margin-top:3px}
+body[data-theme="dark"] .swapChoices button{background:#020617;border-color:#1e293b;color:#f8fafc}
+.planMoveBtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.planMoveBtns button{border-radius:9px;padding:5px 8px;font-size:11px}
+.recoveryReadiness{margin-top:12px}.recoveryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.recoveryChip{border-radius:16px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0}.recoveryChip strong{display:block}.recoveryChip span{display:block;color:#64748b;font-size:12px;margin-top:3px}.recoveryChip.scoreLow{background:#fee2e2}.recoveryChip.scoreMid{background:#fef3c7}.recoveryChip.scoreHigh{background:#dcfce7}
+body[data-theme="dark"] .recoveryChip{background:#020617;border-color:#1e293b}.combinedNutritionRow em{font-style:normal;color:#64748b;font-size:12px}.combinedWorkoutRow.detailed{grid-template-columns:10px 1fr}.combinedWorkoutRow.detailed em{grid-column:2}
+@media(max-width:850px){.recoveryGrid{grid-template-columns:1fr 1fr}}
+
+/* LiftLog v28 Workout Variants + Rest Days + iPhone Inputs */
+.workoutVariantCreator details{
+  margin-top:10px;
+}
+.workoutVariantCreator .preview{
+  max-height:180px;
+  object-fit:cover;
+  border-radius:18px;
+}
+.dayPlanButtons{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:6px;
+  margin-bottom:8px;
+}
+.restPlanBtn{
+  border-radius:12px;
+  padding:8px 10px;
+  background:#e0f2fe;
+  color:#0369a1;
+  font-weight:950;
+}
+.restEventV28{
+  border:2px dashed #38bdf8;
+  background:linear-gradient(135deg,rgba(224,242,254,.8),rgba(240,253,244,.8));
+  color:#075985;
+  border-radius:14px;
+  padding:8px;
+  margin:7px 0;
+  font-size:12px;
+}
+.restEventV28 em{
+  display:block;
+  font-style:normal;
+  opacity:.75;
+  font-size:10px;
+  text-transform:uppercase;
+  font-weight:950;
+}
+.restEventV28 strong{
+  display:block;
+  margin:2px 0;
+}
+body[data-theme="dark"] .restEventV28{
+  background:#082f49;
+  color:#e0f2fe;
+  border-color:#38bdf8;
+}
+@media(max-width:720px){
+  input[type="number"]{
+    font-size:16px;
+  }
+}
