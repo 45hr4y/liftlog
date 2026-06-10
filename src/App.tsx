@@ -1481,6 +1481,7 @@ function HomePage({data}:any){
   const prs = recentPRItems(exercises, sets);
   const recommended = recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets);
   const recoveryMuscles = ['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'];
+  const [homePanel,setHomePanel]=useState<'overview'|'recovery'|'map'|'prs'>('overview');
 
   return <section className="homeV12">
     <Card cls="hero heroV12">
@@ -1503,39 +1504,48 @@ function HomePage({data}:any){
       <button onClick={()=>setPage('routines')}>Routines</button>
     </div>
 
-    <div className="dashboardGrid">
-      <Card cls="glassMetric">
-        <span>Weekly Volume</span>
-        <strong>{fmtVol(vol)}</strong>
-        <em>{weekSets.length} sets this week</em>
-      </Card>
-      <Card cls="glassMetric">
-        <span>Workouts</span>
-        <strong>{weekWorkouts.length}</strong>
-        <em>this week</em>
-      </Card>
-      <Card cls="glassMetric">
-        <span>Library</span>
-        <strong>{exercises.length}</strong>
-        <em>{subtypes.length} machine subtypes</em>
-      </Card>
-      <Card cls="glassMetric">
-        <span>Routines</span>
-        <strong>{routines.length}</strong>
-        <em>templates saved</em>
-      </Card>
+    <div className="homePanelTabs">
+      <button className={homePanel==='overview'?'active':''} onClick={()=>setHomePanel('overview')}>Overview</button>
+      <button className={homePanel==='recovery'?'active':''} onClick={()=>setHomePanel('recovery')}>Recovery</button>
+      <button className={homePanel==='map'?'active':''} onClick={()=>setHomePanel('map')}>Body Map</button>
+      <button className={homePanel==='prs'?'active':''} onClick={()=>setHomePanel('prs')}>PRs</button>
     </div>
 
-    <Card cls="premiumCard recoveryV30">
+    {homePanel==='overview' && <div className="homePanel">
+      <div className="dashboardGrid">
+        <Card cls="glassMetric">
+          <span>Weekly Volume</span>
+          <strong>{fmtVol(vol)}</strong>
+          <em>{weekSets.length} sets this week</em>
+        </Card>
+        <Card cls="glassMetric">
+          <span>Workouts</span>
+          <strong>{weekWorkouts.length}</strong>
+          <em>this week</em>
+        </Card>
+        <Card cls="glassMetric">
+          <span>Library</span>
+          <strong>{exercises.length}</strong>
+          <em>{subtypes.length} machine subtypes</em>
+        </Card>
+        <Card cls="glassMetric">
+          <span>Routines</span>
+          <strong>{routines.length}</strong>
+          <em>templates saved</em>
+        </Card>
+      </div>
+      {recommended&&<Card cls="recommendedTrain">
+        <span>Recommended today</span>
+        <strong>{recommended.routine.name}</strong>
+        <em>{recommended.score}% average readiness</em>
+      </Card>}
+    </div>}
+
+    {homePanel==='recovery' && <Card cls="premiumCard recoveryV30 homePanel">
       <div className="sectionHeader">
         <div><h3>Recovery Status</h3><p className="muted">Based on when each muscle was last trained and recent volume.</p></div>
         <button className="textBtn" onClick={()=>setPage('stats')}>Details</button>
       </div>
-      {recommended&&<div className="recommendedTrain">
-        <span>Recommended today</span>
-        <strong>{recommended.routine.name}</strong>
-        <em>{recommended.score}% average readiness</em>
-      </div>}
       <div className="recoveryStatusGrid">
         {recoveryMuscles.map(m=>{
           const rec = recoveryForMuscleFromHistory(m,exercises,workouts,sets);
@@ -1553,21 +1563,41 @@ function HomePage({data}:any){
         <span><i className="recDot recYellow"></i>51–75% Almost ready</span>
         <span><i className="recDot recGreen"></i>76–100% Ready</span>
       </div>
-    </Card>
+    </Card>}
 
-    <Card cls="premiumCard">
+    {homePanel==='map' && <Card cls="premiumCard homePanel">
       <div className="sectionHeader">
         <h3>Weekly Body Heat Map</h3>
-        <span className="muted miniLabel">Volume intensity</span>
+        <span className="muted miniLabel">Volume / recovery</span>
       </div>
       <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} exercises={exercises} workouts={workouts} sets={sets} />
-      
-    </Card>
+    </Card>}
 
-    <Card cls="premiumCard">
+    {homePanel==='prs' && <Card cls="premiumCard homePanel">
       <div className="sectionHeader">
-        <h3>Recent PR Signals</h3>
+        <h3>Favourite Progression</h3>
         <button className="textBtn" onClick={()=>setPage('stats')}>Progress</button>
+      </div>
+      <div className="favProgressGrid">
+        {exercises.filter((e:Exercise)=>e.favourite).slice(0,6).map((ex:Exercise)=>{
+          const exSets = sets.filter((s:WorkoutSet)=>s.exerciseId===ex.id).sort((a:WorkoutSet,b:WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
+          const first = exSets[0];
+          const last = exSets[exSets.length-1];
+          const best = exSets.length ? Math.max(...exSets.map((s:WorkoutSet)=>e1rm(kgValue(s),s.reps))) : 0;
+          const delta = first && last ? Math.round((e1rm(kgValue(last),last.reps)-e1rm(kgValue(first),first.reps))*10)/10 : 0;
+          const points = exSets.slice(-8).map((s:WorkoutSet)=>e1rm(kgValue(s),s.reps));
+          const maxP = Math.max(...points,1), minP = Math.min(...points,0), range=Math.max(1,maxP-minP);
+          return <div className="favProgressCard" key={ex.id}>
+            <div><strong>{ex.name}</strong><span>{ex.muscle}</span></div>
+            <b>{best?`${best}kg e1RM`:'No sets yet'}</b>
+            <em>{delta>0?`+${delta}kg`:delta<0?`${delta}kg`:'No change yet'}</em>
+            <svg viewBox="0 0 120 34">{points.length>1&&<polyline points={points.map((p:number,i:number)=>`${8+i*(104/(points.length-1))},${28-((p-minP)/range)*22}`).join(' ')} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>}</svg>
+          </div>
+        })}
+      </div>
+      {!exercises.some((e:Exercise)=>e.favourite)&&<p className="muted">Star exercises in the Exercise Library and their progression will appear here.</p>}
+      <div className="sectionHeader prSectionHeader">
+        <h3>Recent PR Signals</h3>
       </div>
       {prs.length ? prs.map((item:any)=><div className="prFeedItem" key={item.set.id}>
         <div className="prIcon">🏆</div>
@@ -1576,7 +1606,7 @@ function HomePage({data}:any){
           <span>{item.set.weight}{item.set.unit} × {item.set.reps} · e1RM {e1rm(kgValue(item.set), item.set.reps)}kg</span>
         </div>
       </div>) : <p className="muted">No sets logged yet. PRs will appear here after workouts.</p>}
-    </Card>
+    </Card>}
 
     <Card cls="premiumCard">
       <div className="sectionHeader">
@@ -1734,12 +1764,21 @@ function SubtypesPage({data}:any){
   const {exercises,subtypes,refresh}=data;
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>(); const [tagInput,setTagInput]=useState(''); const [tags,setTags]=useState<string[]>([]);
   const [settings,setSettings]=useState<MachineSetting[]>([]); const [label,setLabel]=useState(''); const [type,setType]=useState<SettingType>('dropdown'); const [opts,setOpts]=useState('1,2,3,4,5');
-  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
+  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine'); const [savedMsg,setSavedMsg]=useState('');
 
   function addSetting(){ if(!label.trim())return; setSettings([...settings,{id:crypto.randomUUID(),label:label.trim(),type,options:type==='dropdown'?opts.split(',').map(x=>x.trim()):undefined,defaultValue:type==='checkbox'?false:''}]); setLabel(''); }
   function addTag(){ const t=tagInput.trim(); if(!t)return; setTags([...tags,t]); setTagInput(''); }
   async function createExerciseHere(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
-  async function add(){ if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); await db.subtypes.add({exerciseId,name:name.trim(),defaultUnit:unit,photo,settings,tags,createdAt:now()}); setName(''); setPhoto(undefined); setSettings([]); setTags([]); setUnit('kg'); refresh(); }
+  async function add(){ 
+    if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); 
+    const savedName = name.trim();
+    await db.subtypes.add({exerciseId,name:savedName,defaultUnit:unit,photo,settings,tags,createdAt:now()}); 
+    setName(''); setPhoto(undefined); setSettings([]); setTags([]); setUnit('kg'); 
+    setSavedMsg(`Saved ${savedName}`);
+    haptic(12);
+    setTimeout(()=>setSavedMsg(''),1800);
+    refresh(); 
+  }
   async function del(s:Subtype){ if(!confirm('Delete this subtype? Past set logs remain.'))return; await db.subtypes.delete(s.id!); const rs=await db.routineExercises.where('subtypeId').equals(s.id!).toArray(); for(const r of rs) await db.routineExercises.update(r.id!,{subtypeId:undefined}); refresh(); }
   return <section>
     <Card cls="builderHero"><span className="eyebrow">Machine Builder</span><h2>Machines belong to exercises</h2><p className="muted">Search for an exercise, or create one here first, then save the exact machine/subtype with its own unit and settings.</p></Card>
@@ -1753,7 +1792,10 @@ function SubtypesPage({data}:any){
       </details>
       <input placeholder="e.g. Prime Lateral Raise" value={name} onChange={e=>setName(e.target.value)}/>
       <label>Default unit for this exact machine</label><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-      <label className="upload"><ImagePlus/> Add one machine photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setPhoto(e.target.files?.[0])}/></label>{photo&&<img className="preview" src={blobUrl(photo)}/>}
+      <div className="singlePhotoPicker">
+        <label className="upload"><ImagePlus/> {photo ? 'Change Machine Photo' : 'Add Machine Photo'}<input hidden type="file" accept="image/*" onChange={e=>setPhoto(e.target.files?.[0])}/></label>
+        {photo&&<button className="secondary mini" onClick={()=>setPhoto(undefined)}>Remove photo</button>}
+      </div>{photo&&<img className="preview" src={blobUrl(photo)}/>}
       <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><h4>Machine settings</h4><div className="builderGrid"><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}</div>
       <button className="secondary" onClick={addSetting}>Add Setting</button><Pills>{settings.map(s=><span key={s.id}>{s.label} · {s.type}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
     </Card>
@@ -1855,9 +1897,11 @@ function LogPage({data}:any){
   const [newVariantTag,setNewVariantTag]=useState('');
   const [newVariantTags,setNewVariantTags]=useState<string[]>([]);
   const [quickRoutineName,setQuickRoutineName]=useState('');
+  const [saveToast,setSaveToast]=useState('');
 
   useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),1000);return()=>clearInterval(i)},[]);
   useEffect(()=>{ let lock:any; async function requestLock(){ try{ if('wakeLock' in navigator && activeWorkout){ lock = await (navigator as any).wakeLock.request('screen'); } }catch{} } requestLock(); return ()=>{ try{lock?.release?.()}catch{} }; },[activeWorkout?.id]);
+  function showSaveToast(message:string){ setSaveToast(message); haptic(12); setTimeout(()=>setSaveToast(''),1800); }
 
   const routineItems=(activeWorkout?.routineId ? (routineExercises as RoutineExercise[]).filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId) : []).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
   const items=(activeWorkout ? (customMode || !activeWorkout.routineId ? customItems : routineItems) : []).filter((it:RoutineExercise)=>it && it.exerciseId);
@@ -1951,22 +1995,53 @@ function LogPage({data}:any){
     setAddExerciseId(undefined); setAddSubtypeId(undefined);
   }
   async function createVariantAndAdd(){
-    if(!addExerciseId) return alert('Choose exercise first');
+    const focusedRoutineItem = items.find((it:RoutineExercise)=>it.id===focusedItemId) || firstIncompleteItem || items[0];
+    const targetExerciseId = addExerciseId || focusedRoutineItem?.exerciseId;
+    const targetExercise = exercises.find((e:Exercise)=>e.id===targetExerciseId);
+    if(!targetExerciseId) return alert('Choose an exercise first, or open the exercise card you want this machine saved under.');
     if(!newVariantName.trim()) return alert('Enter a variant or machine name');
-    const subtypeId = await db.subtypes.add({exerciseId:addExerciseId,name:newVariantName.trim(),defaultUnit:newVariantUnit,photo:newVariantPhoto,settings:[],tags:newVariantTags,createdAt:now()});
-    setAddSubtypeId(subtypeId);
-    const nextOrder = customMode || !activeWorkout?.routineId 
-      ? customItems.length+1 
-      : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
-    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
-    if(activeWorkout?.routineId && !customMode){
-      await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
+
+    const savedName = newVariantName.trim();
+    const subtypeId = await db.subtypes.add({
+      exerciseId:targetExerciseId,
+      name:savedName,
+      defaultUnit:newVariantUnit,
+      photo:newVariantPhoto,
+      settings:[],
+      tags:newVariantTags,
+      createdAt:now()
+    });
+
+    const alreadyInWorkout = items.some((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
+    if(!alreadyInWorkout){
+      const nextOrder = customMode || !activeWorkout?.routineId 
+        ? customItems.length+1 
+        : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
+      const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:targetExerciseId, subtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
+      if(activeWorkout?.routineId && !customMode){
+        const routineExerciseId = await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
+        setFocusedItemId(routineExerciseId as number);
+        setTimeout(()=>document.getElementById(`logger-${routineExerciseId}`)?.scrollIntoView({behavior:'smooth',block:'center'}),220);
+      } else {
+        setCustomItems([...customItems,item]);
+        setFocusedItemId(item.id);
+        setTimeout(()=>document.getElementById(`logger-${item.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),220);
+      }
     } else {
-      setCustomItems([...customItems,item]);
+      const existingItem = items.find((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
+      if(existingItem?.id) setFocusedItemId(existingItem.id);
+      setAddSubtypeId(subtypeId);
     }
-    setNewVariantName(''); setNewVariantPhoto(undefined); setNewVariantTag(''); setNewVariantTags([]); setAddExerciseId(undefined); setAddSubtypeId(undefined);
+
+    setNewVariantName('');
+    setNewVariantPhoto(undefined);
+    setNewVariantTag('');
+    setNewVariantTags([]);
+    setAddExerciseId(targetExerciseId);
     refresh();
+    showSaveToast(`✓ ${savedName} saved${targetExercise?.name ? ` for ${targetExercise.name}` : ''}`);
   }
+
 
   if(!activeWorkout && finishSummary) {
     const summaryMuscles = Array.isArray(finishSummary.muscles) ? finishSummary.muscles : [];
@@ -1991,6 +2066,7 @@ return <section className="workoutV15">
         <div className="routineProgressBar"><b style={{width:`${progressPct}%`}} /></div>
       </div>
     </Card>
+    {saveToast&&<div className="saveSuccessToast">✓ {saveToast}</div>}
     <div className="floatingTimer smartTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Reset</button><button onClick={()=>setTimer((timer||Date.now())-15000)}>+15</button></div>
     <Card cls="addExercisePanel workoutVariantCreator">
       <h3>Add exercise or variant</h3>
@@ -2004,12 +2080,15 @@ return <section className="workoutV15">
         <button className="secondary" onClick={addCustomExercise}>+ Add selected</button>
       </div>
       <details className="inlineCreate">
-        <summary>Create new machine variant during workout</summary>
+        <summary>Save a machine variant for this exercise</summary>
         <input value={newVariantName} onChange={e=>setNewVariantName(e.target.value)} placeholder="Variant name e.g. Cybex Leg Extension"/>
         <select value={newVariantUnit} onChange={e=>setNewVariantUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-        <div className="tagComposer"><input value={newVariantTag} onChange={e=>setNewVariantTag(e.target.value)} placeholder="Quick tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=newVariantTag.trim(); if(t){setNewVariantTags([...newVariantTags,t]); setNewVariantTag('');}}}>Add tag</button></div><Pills>{newVariantTags.map(t=><span key={t}>#{t}</span>)}</Pills><label className="upload"><ImagePlus/> Add machine image<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
+        <div className="tagComposer"><input value={newVariantTag} onChange={e=>setNewVariantTag(e.target.value)} placeholder="Quick tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=newVariantTag.trim(); if(t){setNewVariantTags([...newVariantTags,t]); setNewVariantTag('');}}}>Add tag</button></div><Pills>{newVariantTags.map(t=><span key={t}>#{t}</span>)}</Pills><div className="singlePhotoPicker">
+          <label className="upload"><ImagePlus/> {newVariantPhoto ? 'Change Machine Photo' : 'Add Machine Photo'}<input hidden type="file" accept="image/*" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
+          {newVariantPhoto&&<button className="secondary mini" onClick={()=>setNewVariantPhoto(undefined)}>Remove photo</button>}
+        </div>
         {newVariantPhoto&&<img className="preview" src={blobUrl(newVariantPhoto)}/>}
-        <button className="primary" onClick={createVariantAndAdd}>Save variant + add to workout</button>
+        <button className="primary" onClick={createVariantAndAdd}>Save machine variant</button>
       </details>
     </Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; const rep=replacements.find((r:WorkoutReplacement)=>r.workoutId===activeWorkout.id&&r.routineExerciseId===it.id);

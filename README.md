@@ -372,3 +372,35 @@ Fixed:
 - Active workouts ignore already-ended workouts.
 - Hardened workout finish, logger, seed and page rendering paths.
 - Fixed stale Progress page navigation to use Stats.
+
+
+## v39 Streamlined Mobile Dashboard
+
+Added:
+- Home dashboard is now split into Overview / Recovery / Body Map / PRs tabs.
+- Reduced the long-scroll feeling on iPhone.
+- Recovery and body map sections are easier to view independently.
+- Machine photos now support both taking a photo and uploading from camera roll.
+- In-workout variant creation can use the current/focused exercise if no exercise is manually selected.
+- Variant button wording clarified: saving a machine variant is for future use.
+
+
+## v40 Save Feedback + Favourite Progression
+
+Fixed:
+- In-workout machine variant saving now gives visible confirmation.
+- Machine variant creation now saves to the database even if the exercise is already in the workout.
+- Added success tick/animation when a machine subtype is saved from the Machines page.
+- Added Favourite Progression cards to the PR tab on Home.
+- Favourite progression shows best estimated 1RM, change over time, and a mini trend line.
+
+
+## v41 Machine Photo UX Polish
+
+Changed:
+- Removed separate "Take photo" button.
+- Machine photo uses one native iPhone picker: Add / Change Machine Photo.
+- The native iPhone picker can still choose Photo Library, Camera, or Files when available.
+- Added remove-photo button before saving.
+- Saving a variant now auto-selects/focuses the relevant exercise where possible.
+- Button copy simplified to "Save machine variant".

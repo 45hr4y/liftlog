@@ -1,6 +1,6 @@
 {
-  "name": "liftlog-v38-hardening-pass",
-  "version": "38.0.0",
+  "name": "liftlog-v41-machine-photo-ux",
+  "version": "41.0.0",
   "private": true,
   "type": "module",
   "scripts": {
