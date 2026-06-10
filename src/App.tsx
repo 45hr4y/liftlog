@@ -1258,11 +1258,16 @@ function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: Work
 
 function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record<string, number>; exercises?:Exercise[]; workouts?:Workout[]; sets?:WorkoutSet[]}) {
   const [mode,setMode]=useState<'volume'|'recovery'>('volume');
+  const [selectedMuscle,setSelectedMuscle]=useState<string|undefined>();
   const recovery = recoveryValuesFromVolume(values, exercises, workouts, sets);
   const display = mode==='volume' ? values : recovery;
   const max = mode==='volume' ? Math.max(...Object.values(values), 1) : 100;
   const cls = (key:string) => `hmPart ${mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}`;
-  const label = (key:string, name:string) => <div className="hmLabel"><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></div>;
+  const label = (key:string, name:string) => <button className="hmLabel" onClick={()=>setSelectedMuscle(key)}><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></button>;
+  const selectedRecovery = selectedMuscle ? recovery[selectedMuscle]||0 : 0;
+  const selectedVolume = selectedMuscle ? values[selectedMuscle]||0 : 0;
+  const selectedExercises = selectedMuscle ? exercises.filter((e:Exercise)=>muscleKeyFromName(e.muscle)===selectedMuscle || (e.secondaryMuscles||[]).some(m=>muscleKeyFromName(m)===selectedMuscle)).slice(0,6) : [];
+  const selectedLast = selectedMuscle ? recoveryForMuscleFromHistory(selectedMuscle,exercises,workouts,sets) : undefined;
 
   return <div className="proHeatMap"><p className="muted bodyMapIntro">Side delts are shown on the outside shoulder cap; front delts sit on the front/anterior shoulder region.</p><div className="heatToggle"><button className={mode==='volume'?'active':''} onClick={()=>setMode('volume')}>Volume</button><button className={mode==='recovery'?'active':''} onClick={()=>setMode('recovery')}>Recovery</button></div>
     <div className="hmBodies">
@@ -1274,28 +1279,28 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
         <path d="M190 150 C210 170,225 210,232 260" className="hmLimb"/>
         <path d="M102 390 C95 435,93 470,90 505" className="hmLimb"/>
         <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
-        <path className={cls('Chest')} d="M100 150 C112 138,132 141,136 154 L136 204 C119 204,105 194,98 176 Z"/>
-        <path className={cls('Chest')} d="M180 150 C168 138,148 141,144 154 L144 204 C161 204,175 194,182 176 Z"/>
-        <path className={cls('SideDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
-        <path className={cls('SideDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
-        <path className={cls('FrontDelt')} d="M55 197 C44 219,39 242,42 264 C59 260,70 231,72 203 Z"/>
-        <path className={cls('FrontDelt')} d="M225 197 C236 219,241 242,238 264 C221 260,210 231,208 203 Z"/>
-        <path className={cls('Biceps')} d="M42 264 C42 292,51 319,65 335 C78 312,77 281,70 258 Z"/>
-        <path className={cls('Biceps')} d="M238 264 C238 292,229 319,215 335 C202 312,203 281,210 258 Z"/>
-        <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
-        <path className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
-        <path className={cls('Abs')} d="M113 210 C122 203,134 203,138 214 L138 316 C122 314,111 296,108 262 Z"/>
-        <path className={cls('Abs')} d="M167 210 C158 203,146 203,142 214 L142 316 C158 314,169 296,172 262 Z"/>
-        <path className={cls('Obliques')} d="M100 210 C92 242,91 282,109 316 C113 275,113 240,110 213 Z"/>
-        <path className={cls('Obliques')} d="M180 210 C188 242,189 282,171 316 C167 275,167 240,170 213 Z"/>
-        <path className={cls('Abductors')} d="M94 318 C82 347,85 382,105 402 C116 376,120 347,116 321 Z"/>
-        <path className={cls('Abductors')} d="M186 318 C198 347,195 382,175 402 C164 376,160 347,164 321 Z"/>
-        <path className={cls('Adductors')} d="M119 320 C116 352,121 382,135 405 C142 374,142 344,137 321 Z"/>
-        <path className={cls('Adductors')} d="M161 320 C164 352,159 382,145 405 C138 374,138 344,143 321 Z"/>
-        <path className={cls('Quads')} d="M95 402 C97 443,108 473,124 489 C140 455,136 424,126 402 Z"/>
-        <path className={cls('Quads')} d="M185 402 C183 443,172 473,156 489 C140 455,144 424,154 402 Z"/>
-        <path className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
-        <path className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
+        <path onClick={()=>setSelectedMuscle('Chest')} className={cls('Chest')} d="M100 150 C112 138,132 141,136 154 L136 204 C119 204,105 194,98 176 Z"/>
+        <path onClick={()=>setSelectedMuscle('Chest')} className={cls('Chest')} d="M180 150 C168 138,148 141,144 154 L144 204 C161 204,175 194,182 176 Z"/>
+        <path onClick={()=>setSelectedMuscle('FrontDelt')} className={cls('FrontDelt')} d="M92 142 C106 132,122 134,132 148 C118 154,105 160,96 174 C88 164,86 151,92 142 Z"/>
+        <path onClick={()=>setSelectedMuscle('FrontDelt')} className={cls('FrontDelt')} d="M188 142 C174 132,158 134,148 148 C162 154,175 160,184 174 C192 164,194 151,188 142 Z"/>
+        <path onClick={()=>setSelectedMuscle('SideDelt')} className={cls('SideDelt')} d="M72 150 C55 158,49 176,52 198 C70 197,84 184,95 160 C88 153,80 150,72 150 Z"/>
+        <path onClick={()=>setSelectedMuscle('SideDelt')} className={cls('SideDelt')} d="M208 150 C225 158,231 176,228 198 C210 197,196 184,185 160 C192 153,200 150,208 150 Z"/>
+        <path onClick={()=>setSelectedMuscle('Biceps')} className={cls('Biceps')} d="M48 208 C47 238,55 270,68 292 C79 268,78 230,70 203 C60 202,53 204,48 208 Z"/>
+        <path onClick={()=>setSelectedMuscle('Biceps')} className={cls('Biceps')} d="M232 208 C233 238,225 270,212 292 C201 268,202 230,210 203 C220 202,227 204,232 208 Z"/>
+        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
+        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
+        <path onClick={()=>setSelectedMuscle('Abs')} className={cls('Abs')} d="M113 210 C122 203,134 203,138 214 L138 316 C122 314,111 296,108 262 Z"/>
+        <path onClick={()=>setSelectedMuscle('Abs')} className={cls('Abs')} d="M167 210 C158 203,146 203,142 214 L142 316 C158 314,169 296,172 262 Z"/>
+        <path onClick={()=>setSelectedMuscle('Obliques')} className={cls('Obliques')} d="M100 210 C92 242,91 282,109 316 C113 275,113 240,110 213 Z"/>
+        <path onClick={()=>setSelectedMuscle('Obliques')} className={cls('Obliques')} d="M180 210 C188 242,189 282,171 316 C167 275,167 240,170 213 Z"/>
+        <path onClick={()=>setSelectedMuscle('Abductors')} className={cls('Abductors')} d="M94 318 C82 347,85 382,105 402 C116 376,120 347,116 321 Z"/>
+        <path onClick={()=>setSelectedMuscle('Abductors')} className={cls('Abductors')} d="M186 318 C198 347,195 382,175 402 C164 376,160 347,164 321 Z"/>
+        <path onClick={()=>setSelectedMuscle('Adductors')} className={cls('Adductors')} d="M119 320 C116 352,121 382,135 405 C142 374,142 344,137 321 Z"/>
+        <path onClick={()=>setSelectedMuscle('Adductors')} className={cls('Adductors')} d="M161 320 C164 352,159 382,145 405 C138 374,138 344,143 321 Z"/>
+        <path onClick={()=>setSelectedMuscle('Quads')} className={cls('Quads')} d="M95 402 C97 443,108 473,124 489 C140 455,136 424,126 402 Z"/>
+        <path onClick={()=>setSelectedMuscle('Quads')} className={cls('Quads')} d="M185 402 C183 443,172 473,156 489 C140 455,144 424,154 402 Z"/>
+        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
+        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
       </svg>
 
       <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Back body muscle heat map">
@@ -1306,29 +1311,34 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
         <path d="M190 150 C210 170,225 210,232 260" className="hmLimb"/>
         <path d="M102 390 C95 435,93 470,90 505" className="hmLimb"/>
         <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
-        <path className={cls('Traps')} d="M106 136 C118 111,132 110,138 140 L138 238 C119 213,105 177,96 148 Z"/>
-        <path className={cls('Traps')} d="M174 136 C162 111,148 110,142 140 L142 238 C161 213,175 177,184 148 Z"/>
-        <path className={cls('UpperBack')} d="M98 150 C118 157,130 176,138 224 C117 218,101 195,92 166 Z"/>
-        <path className={cls('UpperBack')} d="M182 150 C162 157,150 176,142 224 C163 218,179 195,188 166 Z"/>
-        <path className={cls('RearDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
-        <path className={cls('RearDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
-        <path className={cls('Triceps')} d="M55 198 C42 230,43 287,66 334 C79 300,75 244,70 205 Z"/>
-        <path className={cls('Triceps')} d="M225 198 C238 230,237 287,214 334 C201 300,205 244,210 205 Z"/>
-        <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
-        <path className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
-        <path className={cls('Lats')} d="M96 198 C109 226,113 260,108 303 C92 283,83 239,88 202 Z"/>
-        <path className={cls('Lats')} d="M184 198 C171 226,167 260,172 303 C188 283,197 239,192 202 Z"/>
-        <path className={cls('Erectors')} d="M124 222 C134 225,138 245,138 318 C126 309,121 278,120 237 Z"/>
-        <path className={cls('Erectors')} d="M156 222 C146 225,142 245,142 318 C154 309,159 278,160 237 Z"/>
-        <path className={cls('Glutes')} d="M96 318 C116 309,134 319,139 341 C135 374,116 388,96 373 Z"/>
-        <path className={cls('Glutes')} d="M184 318 C164 309,146 319,141 341 C145 374,164 388,184 373 Z"/>
-        <path className={cls('Hamstrings')} d="M96 392 C96 436,107 472,126 489 C139 448,134 415,123 391 Z"/>
-        <path className={cls('Hamstrings')} d="M184 392 C184 436,173 472,154 489 C141 448,146 415,157 391 Z"/>
-        <path className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
-        <path className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
+        <path onClick={()=>setSelectedMuscle('Traps')} className={cls('Traps')} d="M106 136 C118 111,132 110,138 140 L138 238 C119 213,105 177,96 148 Z"/>
+        <path onClick={()=>setSelectedMuscle('Traps')} className={cls('Traps')} d="M174 136 C162 111,148 110,142 140 L142 238 C161 213,175 177,184 148 Z"/>
+        <path onClick={()=>setSelectedMuscle('UpperBack')} className={cls('UpperBack')} d="M98 150 C118 157,130 176,138 224 C117 218,101 195,92 166 Z"/>
+        <path onClick={()=>setSelectedMuscle('UpperBack')} className={cls('UpperBack')} d="M182 150 C162 157,150 176,142 224 C163 218,179 195,188 166 Z"/>
+        <path onClick={()=>setSelectedMuscle('RearDelt')} className={cls('RearDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
+        <path onClick={()=>setSelectedMuscle('RearDelt')} className={cls('RearDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
+        <path onClick={()=>setSelectedMuscle('Triceps')} className={cls('Triceps')} d="M55 198 C42 230,43 287,66 334 C79 300,75 244,70 205 Z"/>
+        <path onClick={()=>setSelectedMuscle('Triceps')} className={cls('Triceps')} d="M225 198 C238 230,237 287,214 334 C201 300,205 244,210 205 Z"/>
+        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
+        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
+        <path onClick={()=>setSelectedMuscle('Lats')} className={cls('Lats')} d="M96 198 C109 226,113 260,108 303 C92 283,83 239,88 202 Z"/>
+        <path onClick={()=>setSelectedMuscle('Lats')} className={cls('Lats')} d="M184 198 C171 226,167 260,172 303 C188 283,197 239,192 202 Z"/>
+        <path onClick={()=>setSelectedMuscle('Erectors')} className={cls('Erectors')} d="M124 222 C134 225,138 245,138 318 C126 309,121 278,120 237 Z"/>
+        <path onClick={()=>setSelectedMuscle('Erectors')} className={cls('Erectors')} d="M156 222 C146 225,142 245,142 318 C154 309,159 278,160 237 Z"/>
+        <path onClick={()=>setSelectedMuscle('Glutes')} className={cls('Glutes')} d="M96 318 C116 309,134 319,139 341 C135 374,116 388,96 373 Z"/>
+        <path onClick={()=>setSelectedMuscle('Glutes')} className={cls('Glutes')} d="M184 318 C164 309,146 319,141 341 C145 374,164 388,184 373 Z"/>
+        <path onClick={()=>setSelectedMuscle('Hamstrings')} className={cls('Hamstrings')} d="M96 392 C96 436,107 472,126 489 C139 448,134 415,123 391 Z"/>
+        <path onClick={()=>setSelectedMuscle('Hamstrings')} className={cls('Hamstrings')} d="M184 392 C184 436,173 472,154 489 C141 448,146 415,157 391 Z"/>
+        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
+        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
       </svg>
     </div>
 
+    {selectedMuscle&&<div className="muscleDetailCard">
+      <div className="row"><h3>{selectedMuscle.replace('FrontDelt','Front delts').replace('SideDelt','Side delts').replace('RearDelt','Rear delts').replace('UpperBack','Upper back')}</h3><button className="secondary mini" onClick={()=>setSelectedMuscle(undefined)}>Close</button></div>
+      <div className="muscleDetailStats"><span>Recovery <strong>{Math.round(selectedRecovery)}%</strong></span><span>Volume <strong>{fmtVol(selectedVolume)}</strong></span><span>Last trained <strong>{selectedLast?.last || '—'}</strong></span><span>Recent sets <strong>{selectedLast?.sets || 0}</strong></span></div>
+      {selectedExercises.length?<Pills>{selectedExercises.map((e:Exercise)=><span key={e.id}>{e.name}</span>)}</Pills>:<p className="muted">No saved exercises for this muscle yet.</p>}
+    </div>}
     <div className="hmLegendGrid">
       {label('Chest','Chest')}
       {label('Traps','Traps')}
@@ -1469,6 +1479,11 @@ function EmptyState({title,body,action}:{title:string;body:string;action?:any}) 
   return <Card cls="emptyStateCard"><h3>{title}</h3><p className="muted">{body}</p>{action}</Card>
 }
 
+
+function FeatureHelp({title,children}:{title:string;children:React.ReactNode}) {
+  return <details className="featureHelp"><summary>ⓘ {title}</summary><div>{children}</div></details>
+}
+
 function HomePage({data}:any){
   const {exercises,subtypes,routines,routineExercises,workouts,sets,setPage}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
@@ -1482,9 +1497,17 @@ function HomePage({data}:any){
   const recommended = recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets);
   const recoveryMuscles = ['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'];
   const [homePanel,setHomePanel]=useState<'overview'|'recovery'|'map'|'prs'>('overview');
+  const lastRoutine = lastWorkout?.routineId ? routines.find((r:Routine)=>r.id===lastWorkout.routineId) : suggestedRoutine;
+  const nutritionLogsHome = loadNutritionLogs();
+  const weekNutrition = Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=d.toISOString().slice(0,10); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});
+  const waterGoalDaysHome = weekNutrition.filter(n=>n.waterMl>=2000).length;
+  const proteinGoalDaysHome = weekNutrition.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length;
+  const recoveryScoresHome = recoveryMuscles.map(m=>({m,rec:recoveryForMuscleFromHistory(m,exercises,workouts,sets)}));
+  const mostRecovered = recoveryScoresHome.sort((a,b)=>b.rec.score-a.rec.score)[0];
+  const leastRecovered = [...recoveryScoresHome].sort((a,b)=>a.rec.score-b.rec.score)[0];
 
   return <section className="homeV12">
-    <Card cls="featureIntro"><h3>Welcome to LiftLog</h3><p className="muted">Start workouts, track machines, monitor recovery, and review progress without needing to understand every feature first.</p></Card>
+    <FeatureHelp title="About LiftLog"><p>Start workouts, track machines, monitor recovery, and review progress without needing to understand every feature first.</p></FeatureHelp>
     <Card cls="hero heroV12">
       <div className="heroTop">
         <div>
@@ -1496,6 +1519,32 @@ function HomePage({data}:any){
       </div>
       <button className="primary glowBtn" onClick={()=>setPage('log')}>Start Workout</button>
     </Card>
+
+    <div className="homeWeeklyCards">
+      <Card cls="continueRoutineCard">
+        <span className="eyebrow">CONTINUE LAST ROUTINE</span>
+        <h3>{lastRoutine?.name || 'Start training'}</h3>
+        <p className="muted">{lastWorkout ? `Last completed ${lastWorkout.date}` : 'Create or choose a routine to begin.'}</p>
+        <button className="primary" onClick={()=>setPage('log')}>Start</button>
+      </Card>
+      <Card cls="recoveryInsightCard">
+        <span className="eyebrow">RECOVERY INSIGHTS</span>
+        <div className="recoveryInsightRows">
+          <span>🟢 Most recovered <strong>{mostRecovered?.m || '—'}</strong></span>
+          <span>🔴 Needs recovery <strong>{leastRecovered?.m || '—'}</strong></span>
+          <span>Suggested <strong>{recommended?.routine?.name || 'Listen to your body'}</strong></span>
+        </div>
+      </Card>
+      <Card cls="homeWeekSummaryCard">
+        <span className="eyebrow">THIS WEEK</span>
+        <div className="homeWeekMiniStats">
+          <b>🏋️ {weekWorkouts.length}</b><span>Workouts</span>
+          <b>🏆 {prs.length}</b><span>PRs</span>
+          <b>💧 {waterGoalDaysHome}/7</b><span>Water</span>
+          <b>🥩 {proteinGoalDaysHome}/7</b><span>Protein</span>
+        </div>
+      </Card>
+    </div>
 
     {!workouts.length && <EmptyState title="No workouts yet" body="Start a workout from scratch, or create a routine and LiftLog will begin tracking your history, recovery, stats and nutrition." action={<button className="primary" onClick={()=>setPage('log')}>Start first workout</button>} />}
 
@@ -1849,7 +1898,7 @@ function RoutinesPage({data}:any){
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
   const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
   return <section>
-    <Card cls="featureIntro"><h3>Routine builder</h3><p className="muted">Create routines, add exercises, save machine variants and reorder the plan. Use “Fix numbering” if you change the order a lot.</p></Card>
+    <FeatureHelp title="About Routine Builder"><p>Create routines, add exercises, save machine variants and reorder the plan. Use “Fix numbering” if you change the order a lot.</p></FeatureHelp>
     {renameRoutineId&&<Card cls="editPanelV31"><h3>Rename routine</h3><input value={renameRoutineName} onChange={e=>setRenameRoutineName(e.target.value)} placeholder="Routine name"/><div className="grid2"><button className="primary" onClick={saveRenameRoutine}>Save name</button><button className="secondary" onClick={()=>setRenameRoutineId(undefined)}>Cancel</button></div></Card>}
     <Card cls="cardioToggleCard"><div className="row"><div><h3>Optional Cardio</h3><p className="muted">Toggle this on if you want cardio prompts while building routines.</p></div><label className="switchLine"><input type="checkbox" checked={showCardio} onChange={e=>setShowCardio(e.target.checked)}/><span>{showCardio?'On':'Off'}</span></label></div>{showCardio&&<div className="grid3 cardioInputs"><input value={cardioName} onChange={e=>setCardioName(e.target.value)} placeholder="Cardio type"/><input value={cardioMinutes} onChange={e=>setCardioMinutes(e.target.value)} inputMode="numeric" placeholder="Minutes"/><button className="secondary" onClick={addCardioToRoutine}>Add cardio note</button></div>}</Card>
     <Card cls="builderHero"><span className="eyebrow">Routine Builder</span><h2>Build while you create</h2><p className="muted">Create a routine, create exercises, add machines and add them to the workout template from one place.</p></Card>
@@ -2283,7 +2332,7 @@ function CalendarPage({data}:any){
   }
 
   return <section>
-    <Card cls="featureIntro"><h3>Calendar planner</h3><p className="muted">Plan workouts or rest days for the week. A rest day replaces workout plans on that date so your calendar stays clean.</p></Card>
+    <FeatureHelp title="About Calendar"><p>Plan workouts or rest days for the week. A rest day replaces workout plans on that date so your calendar stays clean.</p></FeatureHelp>
     <Card cls="premiumCard calendarToolbar">
       <div className="calendarTop">
         <button className="smallAction" onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Previous</button>
@@ -2517,9 +2566,14 @@ function NutritionPage(){
   const proteinTarget = day.proteinTarget || 3;
   const qualityCounts={great:day.meals.filter(m=>m.quality==='Great').length, okay:day.meals.filter(m=>m.quality==='Okay').length, off:day.meals.filter(m=>m.quality==='Off-track').length};
   const snackCount = day.meals.filter(m=>m.type==='Snack').length;
+  const mealCount = day.meals.filter(m=>m.type!=='Snack').length;
   const healthyCount = day.meals.filter(m=>m.quality==='Great' || (m.quality==='Okay' && (m.proteinIncluded || m.fruitVegIncluded))).length;
-  const snackRatio = day.meals.length ? Math.round((snackCount/day.meals.length)*100) : 0;
-  const okayHealthyRatio = day.meals.length ? Math.round((healthyCount/day.meals.length)*100) : 0;
+  const offTrackCount = day.meals.filter(m=>m.quality==='Off-track').length;
+  const proteinMet = protein >= proteinTarget;
+  const waterMet = day.waterMl >= 2000;
+  const fruitVegMet = day.meals.some(m=>m.fruitVegIncluded);
+  const consistencyMet = day.meals.length >= 3;
+  const lateSnackFlag = day.meals.some(m=>m.type==='Snack' && /late|night|after dinner|midnight/i.test(`${m.title} ${m.notes||''}`));
   const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
   const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
   const nextSuggestion=score>=90?'Strong day. Repeat the basics tomorrow.':day.waterMl<2000?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':!(day.reflection||'').trim()?'Write a quick reflection.':'You are on track.';
@@ -2527,7 +2581,7 @@ function NutritionPage(){
   async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
 
   return <section className="nutritionPage nutritionPro">
-    <Card cls="featureIntro"><h3>Nutrition accountability</h3><p className="muted">This is not strict calorie tracking. Use it to spot patterns: hydration, protein, caffeine, snacking, and whether meals felt great/okay/off-track.</p></Card>
+    <FeatureHelp title="About Nutrition"><p>This is not strict calorie tracking. Use it to spot patterns: hydration, protein, caffeine, snacking, and whether meals felt great/okay/off-track.</p></FeatureHelp>
     <Card cls="hero nutritionHeroPro">
       <div className="nutritionHeroGrid">
         <div><div className="eyebrow lightText">NUTRITION ACCOUNTABILITY</div><h2>Fuel Dashboard</h2><p>Track water, creatine, caffeine, protein and meals without calorie obsession.</p></div>
@@ -2536,7 +2590,25 @@ function NutritionPage(){
     </Card>
 
     <Card cls="nutritionCommandCard"><div><span>Today's focus</span><strong>{nextSuggestion}</strong></div><input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/></Card>
-    <Card cls="nutritionInsightCard"><h3>Eating pattern today</h3><div className="nutritionInsightGrid"><div><span>Snacking</span><strong>{snackCount}</strong><em>{snackRatio}% of logs</em></div><div><span>Healthy/okay choices</span><strong>{healthyCount}</strong><em>{okayHealthyRatio}% of logs</em></div><div><span>Off-track</span><strong>{qualityCounts.off}</strong><em>{qualityCounts.off>0?'Notice triggers':'None logged'}</em></div></div></Card>
+    <Card cls="nutritionPatternCard">
+      <div className="sectionHeader">
+        <div><h3>Today's Eating Pattern</h3><p className="muted">Simple behaviour snapshot, not calorie tracking.</p></div>
+        <div className="nutritionScoreBadge"><strong>{score}</strong><span>/100</span></div>
+      </div>
+      <div className="nutritionPatternGrid">
+        <div><span>Meals</span><strong>{mealCount}</strong></div>
+        <div><span>Snacks</span><strong>{snackCount}</strong></div>
+        <div><span>Off-track</span><strong>{offTrackCount}</strong></div>
+        <div><span>Healthy/okay</span><strong>{healthyCount}</strong></div>
+      </div>
+      <div className="nutritionSignalList">
+        <span className={proteinMet?'good':'warn'}>{proteinMet?'✓':'○'} Protein goal</span>
+        <span className={waterMet?'good':'warn'}>{waterMet?'✓':'○'} Water goal</span>
+        <span className={fruitVegMet?'good':'warn'}>{fruitVegMet?'✓':'○'} Fruit/Veg</span>
+        <span className={consistencyMet?'good':'warn'}>{consistencyMet?'✓':'○'} Meal consistency</span>
+        <span className={lateSnackFlag?'bad':'good'}>{lateSnackFlag?'!':'✓'} Late snack check</span>
+      </div>
+    </Card>
     <Card cls="habitChecklistCard">
       <div className="sectionHeader">
         <div><h3>Daily Habits</h3><p className="muted">{score}% complete · starts from 0 each day</p></div>
@@ -2805,7 +2877,7 @@ function BackupPage({data}:any){
 
 
 function HistoryPage({data}:any){
-  const {exercises,routines,workouts,sets,replacements,refresh}=data;
+  const {exercises,routines,workouts,sets,replacements,plannedWorkouts=[],refresh}=data;
   const [selectedId,setSelectedId]=useState<number|undefined>();
   const [editingSet,setEditingSet]=useState<WorkoutSet|undefined>();
   const [editWeight,setEditWeight]=useState('');
@@ -2815,6 +2887,7 @@ function HistoryPage({data}:any){
   const [editMealTitle,setEditMealTitle]=useState('');
   const [editMealNotes,setEditMealNotes]=useState('');
   const [nutritionLogs,setNutritionLogs]=useState<Record<string,DailyNutritionLog>>(()=>loadNutritionLogs());
+  const [filter,setFilter]=useState<'all'|'workouts'|'nutrition'|'prs'|'rest'>('all');
   const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
   const selected = completed.find((w:Workout)=>w.id===selectedId);
 
@@ -2880,31 +2953,101 @@ function HistoryPage({data}:any){
     </section>
   }
 
-  const dayKeys = Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs)])).sort((a,b)=>b.localeCompare(a)).slice(0,30);
-  const totalVol7 = completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).reduce((a,w)=>a+workoutVolume(w,sets),0);
-  const nutritionDays7 = Object.keys(nutritionLogs).filter(d=>new Date(d)>=new Date(Date.now()-7*86400000)).length;
-  const meals7 = Object.entries(nutritionLogs).filter(([d])=>new Date(d)>=new Date(Date.now()-7*86400000)).reduce((a,[,n])=>a+(n.meals?.length||0),0);
+  const dayKeys = Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs), ...plannedWorkouts.map((p:PlannedWorkout)=>p.date)])).sort((a,b)=>b.localeCompare(a)).slice(0,30);
+  const recentDate = (d:string)=>new Date(d)>=new Date(Date.now()-7*86400000);
+  const workouts7 = completed.filter((w:Workout)=>recentDate(w.date));
+  const totalVol7 = workouts7.reduce((a,w)=>a+workoutVolume(w,sets),0);
+  const nutritionEntries7 = Object.entries(nutritionLogs).filter(([d])=>recentDate(d)).map(([d,n])=>normaliseNutritionDay(n));
+  const nutritionDays7 = nutritionEntries7.length;
+  const meals7 = nutritionEntries7.reduce((a,n)=>a+(n.meals?.length||0),0);
+  const waterGoalDays = nutritionEntries7.filter(n=>n.waterMl>=2000).length;
+  const proteinGoalDays = nutritionEntries7.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length;
+  const offTrackDays = nutritionEntries7.filter(n=>n.meals.some(m=>m.quality==='Off-track')).length;
+  const prCount7 = sets.filter((s:WorkoutSet)=>recentDate(s.createdAt.slice(0,10))).filter((s:WorkoutSet)=>{
+    const prior=sets.filter((x:WorkoutSet)=>x.exerciseId===s.exerciseId&&x.createdAt<s.createdAt);
+    return prior.length && e1rm(kgValue(s),s.reps)>Math.max(...prior.map((x:WorkoutSet)=>e1rm(kgValue(x),x.reps)));
+  }).length;
 
   return <section>
-    <Card cls="featureIntro"><h3>History</h3><p className="muted">Review previous workouts and nutrition days. Use this page to spot patterns and clean up incorrect entries.</p></Card><Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can edit/delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
+    <FeatureHelp title="About History"><p>Review workouts and nutrition as a timeline. Tap a workout to edit sets; tap a meal chip to edit it. Use filters to focus on workouts, nutrition, PRs or rest days.</p></FeatureHelp>
     {editingMeal&&<Card cls="editPanelV31"><h3>Edit meal</h3><input value={editMealTitle} onChange={e=>setEditMealTitle(e.target.value)} placeholder="Meal title"/><textarea value={editMealNotes} onChange={e=>setEditMealNotes(e.target.value)} placeholder="Meal notes"/><div className="grid2"><button className="primary" onClick={saveMealEdit}>Save meal</button><button className="secondary" onClick={()=>setEditingMeal(undefined)}>Cancel</button></div></Card>}
-    <div className="historySummaryGrid">
-      <Card><span className="eyebrow">7-day volume</span><h3>{fmtVol(totalVol7)}</h3></Card>
-      <Card><span className="eyebrow">Workouts</span><h3>{completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).length}</h3></Card>
-      <Card><span className="eyebrow">Nutrition days</span><h3>{nutritionDays7}</h3></Card>
+
+    <Card cls="historyWeekHero">
+      <div>
+        <span className="eyebrow">THIS WEEK</span>
+        <h2>Training + nutrition snapshot</h2>
+        <p className="muted">{workouts7.length} workouts · {nutritionDays7}/7 nutrition days · {prCount7} PR signal{prCount7===1?'':'s'}</p>
+      </div>
+      <div className="historyHeroStats">
+        <strong>{fmtVol(totalVol7)}</strong>
+        <span>7-day volume</span>
+      </div>
+    </Card>
+
+    <div className="historySummaryGrid upgraded">
+      <Card><span className="eyebrow">Water goal</span><h3>{waterGoalDays}/7</h3></Card>
+      <Card><span className="eyebrow">Protein goal</span><h3>{proteinGoalDays}/7</h3></Card>
       <Card><span className="eyebrow">Meals logged</span><h3>{meals7}</h3></Card>
+      <Card><span className="eyebrow">Off-track days</span><h3>{offTrackDays}</h3></Card>
     </div>
-    {dayKeys.length ? dayKeys.map(day=>{
-      const dayWorkouts=completed.filter((w:Workout)=>w.date===day);
-      const n=nutritionLogs[day] ? normaliseNutritionDay(nutritionLogs[day]) : undefined;
-      return <Card key={day} cls="combinedDayCard">
-        <div className="row"><h3>{new Date(day).toLocaleDateString([], {weekday:'long', day:'numeric', month:'short'})}</h3>{n&&<button className="danger mini" onClick={()=>deleteNutritionDay(day)}>Delete nutrition</button>}</div>
-        {dayWorkouts.map((w:Workout)=>{ const routine=routines.find((r:Routine)=>r.id===w.routineId); const ss=workoutSetsFor(w,sets); return <div className="combinedWorkoutRowWrap" key={w.id}><button className="combinedWorkoutRow detailed" onClick={()=>setSelectedId(w.id)}><span style={{background:routine?.color||'#2563eb'}}/><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(workoutVolume(w,sets))} · {durationMinutes(w)} min · Top: {ss.length?exercises.find((e:Exercise)=>e.id===ss[0].exerciseId)?.name:'—'}</em></button><button className="danger mini" onClick={()=>deleteWorkout(w)}>Delete</button></div> })}
-        {n ? <div className="combinedNutritionRow"><strong>Nutrition · {nutritionScoreV19(n)}%</strong><span>Water {n.waterMl}ml · Meals {n.meals.length} · Protein {(n.proteinServings??0)}/{n.proteinTarget??3} · Caffeine {n.caffeineMg}mg · {n.creatineTaken?'Creatine ✓':'Creatine ○'}</span>{n.reflection&&<em>{n.reflection.slice(0,90)}</em>}<div className="mealDeleteList">{n.meals.slice(0,4).map(m=><span key={m.id}><button onClick={()=>beginMealEdit(day,m)}>Edit {m.type}</button><button onClick={()=>deleteMeal(day,m.id)}>Delete {m.type}</button></span>)}</div></div> : <p className="muted">No nutrition logged.</p>}
-      </Card>
-    }) : <Card><p className="muted">No history yet.</p></Card>}
+
+    <div className="historyFilterTabs">
+      {(['all','workouts','nutrition','prs','rest'] as const).map(f=><button key={f} className={filter===f?'active':''} onClick={()=>setFilter(f)}>{f==='all'?'All':f==='prs'?'PRs':f==='rest'?'Rest Days':f[0].toUpperCase()+f.slice(1)}</button>)}
+    </div>
+
+    <div className="historyTimeline">
+      {dayKeys.length ? dayKeys.map(day=>{
+        const dayWorkouts=completed.filter((w:Workout)=>w.date===day);
+        const dayRest=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day && p.type==='rest');
+        const n=nutritionLogs[day] ? normaliseNutritionDay(nutritionLogs[day]) : undefined;
+        const dayHasPR = sets.some((s:WorkoutSet)=>s.createdAt.slice(0,10)===day && sets.some((x:WorkoutSet)=>x.exerciseId===s.exerciseId&&x.createdAt<s.createdAt&&e1rm(kgValue(s),s.reps)>e1rm(kgValue(x),x.reps)));
+        if(filter==='workouts' && !dayWorkouts.length) return null;
+        if(filter==='nutrition' && !n) return null;
+        if(filter==='prs' && !dayHasPR) return null;
+        if(filter==='rest' && !dayRest.length) return null;
+        return <Card key={day} cls="timelineDayCard">
+          <div className="timelineDateRail">
+            <strong>{new Date(day).toLocaleDateString([], {day:'numeric'})}</strong>
+            <span>{new Date(day).toLocaleDateString([], {month:'short'})}</span>
+            <em>{new Date(day).toLocaleDateString([], {weekday:'short'})}</em>
+          </div>
+          <div className="timelineContent">
+            {dayRest.map((r:PlannedWorkout)=><div className="timelineRest" key={r.id||r.date}><strong>Rest Day</strong><em>Recovery planned</em></div>)}
+            {dayWorkouts.map((w:Workout)=>{ 
+              const routine=routines.find((r:Routine)=>r.id===w.routineId); 
+              const ss=workoutSetsFor(w,sets); 
+              const vol=workoutVolume(w,sets);
+              const muscles=Array.from(new Set(ss.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter(Boolean))).slice(0,4);
+              return <div className="timelineWorkout" key={w.id}>
+                <button className="timelineWorkoutMain" onClick={()=>setSelectedId(w.id)}>
+                  <span style={{background:routine?.color||'#2563eb'}}/>
+                  <div><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(vol)} · {durationMinutes(w)} min</em></div>
+                </button>
+                <Pills>{muscles.map((m:any)=><span key={m}>{m}</span>)}</Pills>
+                <button className="danger mini subtleDelete" onClick={()=>deleteWorkout(w)}>Delete</button>
+              </div> 
+            })}
+            {n ? <div className="timelineNutrition">
+              <div className="timelineNutritionTop">
+                <strong>Nutrition · {nutritionScoreV19(n)}/100</strong>
+                <button className="danger mini subtleDelete" onClick={()=>deleteNutritionDay(day)}>Delete day</button>
+              </div>
+              <div className="nutritionMiniStats">
+                <span>{n.meals.length} meals</span>
+                <span>{n.meals.filter(m=>m.type==='Snack').length} snacks</span>
+                <span>{n.waterMl}ml water</span>
+                <span>Protein {(n.proteinServings??0)}/{n.proteinTarget??3}</span>
+              </div>
+              {n.meals.length>0&&<div className="mealChipRow">{n.meals.slice(0,6).map(m=><button key={m.id} className={`mealChip ${m.quality.toLowerCase().replace('-','')}`} onClick={()=>beginMealEdit(day,m)} onContextMenu={(e)=>{e.preventDefault();deleteMeal(day,m.id)}}>{m.type}: {m.title}</button>)}</div>}
+              {n.reflection&&<p className="muted">{n.reflection.slice(0,110)}</p>}
+            </div> : <p className="muted">No nutrition logged.</p>}
+          </div>
+        </Card>
+      }) : <EmptyState title="No history yet" body="Start your first workout or log nutrition to build your timeline." action={undefined} />}
+    </div>
   </section>
 }
+
 
 class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasError:boolean;error?:any}> {
   constructor(props:{children:React.ReactNode}) {
@@ -2953,5 +3096,6 @@ class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasErro
 function PageCrashGuard({children}:{children:React.ReactNode}) {
   return <LiftLogErrorBoundary>{children}</LiftLogErrorBoundary>;
 }
+
 
 

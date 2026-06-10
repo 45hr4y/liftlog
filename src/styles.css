@@ -1962,3 +1962,416 @@ body[data-theme="dark"] .saveSuccessInline{
 .saveSuccessToast{
   letter-spacing:-.01em;
 }
+
+
+/* LiftLog v42 Routine Editing + Cardio */
+.cardioToggleCard{border:1px solid #bfdbfe;background:#eff6ff}
+.switchLine{display:flex;gap:8px;align-items:center;font-weight:950}
+.switchLine input{width:22px;height:22px}
+.cardioInputs{margin-top:12px}
+.routineMachinePhoto{margin:8px 0}
+body[data-theme="dark"] .cardioToggleCard{background:#020617;border-color:#1e3a8a}
+
+
+/* LiftLog v43 Logic + Friend-Friendly UX */
+.featureIntro{
+  border:1px solid #dbeafe;
+  background:linear-gradient(135deg,#eff6ff,#f8fafc);
+}
+.featureIntro h3{
+  margin:0 0 4px;
+}
+.nutritionInsightCard{
+  border:1px solid #bbf7d0;
+  background:#f0fdf4;
+}
+.nutritionInsightGrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.nutritionInsightGrid div{
+  border-radius:16px;
+  padding:12px;
+  background:rgba(255,255,255,.78);
+}
+.nutritionInsightGrid span{
+  display:block;
+  color:#64748b;
+  font-size:12px;
+  font-weight:950;
+  text-transform:uppercase;
+}
+.nutritionInsightGrid strong{
+  display:block;
+  font-size:28px;
+}
+.nutritionInsightGrid em{
+  color:#64748b;
+  font-style:normal;
+  font-weight:800;
+}
+.renumberBtn{
+  margin:10px 0;
+}
+.bodyMapIntro{
+  margin:0 0 10px;
+}
+body[data-theme="dark"] .featureIntro,
+body[data-theme="dark"] .nutritionInsightCard{
+  background:#020617;
+  border-color:#1e3a8a;
+}
+body[data-theme="dark"] .nutritionInsightGrid div{
+  background:#1e293b;
+}
+@media(max-width:720px){
+  .nutritionInsightGrid{
+    grid-template-columns:1fr;
+  }
+}
+
+
+/* LiftLog v44 History + Nutrition Timeline */
+.nutritionPatternCard{
+  border:1px solid #bbf7d0;
+  background:linear-gradient(135deg,#f0fdf4,#ffffff);
+}
+.nutritionScoreBadge{
+  min-width:76px;
+  height:76px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  background:#0f172a;
+  color:white;
+  box-shadow:0 16px 34px rgba(15,23,42,.16);
+}
+.nutritionScoreBadge strong{font-size:26px;line-height:1}
+.nutritionScoreBadge span{font-size:12px;font-weight:950;margin-top:-16px}
+.nutritionPatternGrid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin:12px 0;
+}
+.nutritionPatternGrid div{
+  border-radius:18px;
+  padding:12px;
+  background:#f8fafc;
+}
+.nutritionPatternGrid span{
+  display:block;
+  color:#64748b;
+  font-size:11px;
+  font-weight:950;
+  text-transform:uppercase;
+}
+.nutritionPatternGrid strong{font-size:28px}
+.nutritionSignalList{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.nutritionSignalList span{
+  border-radius:999px;
+  padding:8px 10px;
+  font-weight:950;
+  font-size:12px;
+}
+.nutritionSignalList .good{background:#dcfce7;color:#166534}
+.nutritionSignalList .warn{background:#fef3c7;color:#92400e}
+.nutritionSignalList .bad{background:#fee2e2;color:#991b1b}
+.historyWeekHero{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:center;
+  background:linear-gradient(135deg,#0f172a,#334155);
+  color:white;
+}
+.historyWeekHero .muted{color:#dbeafe}
+.historyHeroStats{
+  border-radius:24px;
+  padding:16px;
+  min-width:160px;
+  background:rgba(255,255,255,.12);
+  text-align:center;
+}
+.historyHeroStats strong{display:block;font-size:26px}
+.historyHeroStats span{font-size:12px;font-weight:950;text-transform:uppercase}
+.historySummaryGrid.upgraded{
+  margin:14px 0;
+}
+.historyFilterTabs{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin:12px 0;
+}
+.historyFilterTabs button{
+  border-radius:999px;
+  min-height:42px;
+  background:#f1f5f9;
+  color:#64748b;
+  font-weight:950;
+}
+.historyFilterTabs button.active{
+  background:#0f172a;
+  color:white;
+}
+.historyTimeline{
+  display:grid;
+  gap:12px;
+}
+.timelineDayCard{
+  display:grid;
+  grid-template-columns:110px 1fr;
+  gap:16px;
+}
+.timelineDateRail{
+  border-right:1px solid #e2e8f0;
+  padding-right:12px;
+}
+.timelineDateRail strong{
+  display:block;
+  font-size:30px;
+  line-height:1;
+}
+.timelineDateRail span,
+.timelineDateRail em{
+  display:block;
+  color:#64748b;
+  font-style:normal;
+  font-weight:950;
+}
+.timelineContent{
+  display:grid;
+  gap:12px;
+}
+.timelineWorkout,
+.timelineNutrition{
+  border-radius:20px;
+  padding:12px;
+  background:#f8fafc;
+}
+.timelineWorkoutMain{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  text-align:left;
+  background:transparent;
+  padding:0;
+}
+.timelineWorkoutMain>span{
+  width:12px;
+  min-width:12px;
+  height:44px;
+  border-radius:999px;
+}
+.timelineWorkoutMain strong,
+.timelineNutritionTop strong{
+  display:block;
+  font-size:18px;
+}
+.timelineWorkoutMain em{
+  color:#64748b;
+  font-style:normal;
+  font-weight:800;
+}
+.timelineNutritionTop{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+}
+.nutritionMiniStats{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:10px 0;
+}
+.nutritionMiniStats span,
+.mealChip{
+  border-radius:999px;
+  padding:7px 9px;
+  background:white;
+  color:#475569;
+  font-weight:900;
+  font-size:12px;
+}
+.mealChipRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.mealChip.great{background:#dcfce7;color:#166534}
+.mealChip.okay{background:#dbeafe;color:#1d4ed8}
+.mealChip.offtrack{background:#fee2e2;color:#991b1b}
+.subtleDelete{
+  margin-top:8px;
+  opacity:.72;
+}
+body[data-theme="dark"] .nutritionPatternCard,
+body[data-theme="dark"] .timelineWorkout,
+body[data-theme="dark"] .timelineNutrition,
+body[data-theme="dark"] .nutritionPatternGrid div{
+  background:#020617;
+}
+body[data-theme="dark"] .nutritionMiniStats span,
+body[data-theme="dark"] .mealChip{
+  background:#1e293b;
+}
+@media(max-width:720px){
+  .nutritionPatternGrid{grid-template-columns:repeat(2,1fr)}
+  .historyWeekHero{display:grid}
+  .historyHeroStats{text-align:left}
+  .timelineDayCard{grid-template-columns:1fr}
+  .timelineDateRail{border-right:0;border-bottom:1px solid #e2e8f0;padding-bottom:8px;display:flex;gap:8px;align-items:end}
+  .historyFilterTabs{grid-template-columns:repeat(2,1fr)}
+}
+
+
+/* LiftLog v45.5 UX + Recovery Polish */
+.featureHelp{
+  border:1px solid #dbeafe;
+  border-radius:22px;
+  background:linear-gradient(135deg,#eff6ff,#ffffff);
+  padding:0;
+  overflow:hidden;
+  margin-bottom:14px;
+}
+.featureHelp summary{
+  min-height:52px;
+  display:flex;
+  align-items:center;
+  cursor:pointer;
+  padding:0 18px;
+  font-weight:950;
+  color:#0f172a;
+}
+.featureHelp div{
+  padding:0 18px 16px;
+}
+.homeWeeklyCards{
+  display:grid;
+  grid-template-columns:1.05fr 1.1fr 1.2fr;
+  gap:12px;
+  margin:14px 0;
+}
+.continueRoutineCard,
+.recoveryInsightCard,
+.homeWeekSummaryCard{
+  border:1px solid #dbeafe;
+}
+.recoveryInsightRows{
+  display:grid;
+  gap:8px;
+}
+.recoveryInsightRows span{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  border-radius:14px;
+  background:#f8fafc;
+  padding:9px 10px;
+  font-weight:850;
+}
+.homeWeekMiniStats{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:6px 10px;
+  align-items:center;
+}
+.homeWeekMiniStats b{
+  font-size:18px;
+}
+.homeWeekMiniStats span{
+  color:#64748b;
+  font-weight:850;
+}
+.hmPart{
+  cursor:pointer;
+}
+.muscleDetailCard{
+  margin:12px 0;
+  border-radius:22px;
+  border:1px solid #bfdbfe;
+  padding:14px;
+  background:#eff6ff;
+}
+.muscleDetailStats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin:10px 0;
+}
+.muscleDetailStats span{
+  border-radius:14px;
+  padding:10px;
+  background:white;
+  color:#64748b;
+  font-weight:850;
+}
+.muscleDetailStats strong{
+  display:block;
+  color:#0f172a;
+  font-size:17px;
+}
+.hmLabel{
+  border:1px solid #e2e8f0;
+  background:white;
+  color:#0f172a;
+  text-align:left;
+}
+.hmLabel:hover{
+  border-color:#93c5fd;
+}
+.timelineRest{
+  border-radius:20px;
+  padding:14px;
+  background:#ecfeff;
+  border:1px solid #a5f3fc;
+  display:grid;
+  gap:4px;
+}
+.timelineRest strong{
+  font-size:18px;
+}
+.timelineRest em{
+  color:#0e7490;
+  font-style:normal;
+  font-weight:900;
+}
+body[data-theme="dark"] .featureHelp,
+body[data-theme="dark"] .continueRoutineCard,
+body[data-theme="dark"] .recoveryInsightCard,
+body[data-theme="dark"] .homeWeekSummaryCard,
+body[data-theme="dark"] .muscleDetailCard{
+  background:#020617;
+  border-color:#1e3a8a;
+}
+body[data-theme="dark"] .featureHelp summary,
+body[data-theme="dark"] .hmLabel,
+body[data-theme="dark"] .muscleDetailStats strong{
+  color:#f8fafc;
+}
+body[data-theme="dark"] .hmLabel,
+body[data-theme="dark"] .muscleDetailStats span,
+body[data-theme="dark"] .recoveryInsightRows span{
+  background:#1e293b;
+  border-color:#334155;
+}
+body[data-theme="dark"] .timelineRest{
+  background:#083344;
+  border-color:#155e75;
+}
+@media(max-width:900px){
+  .homeWeeklyCards{
+    grid-template-columns:1fr;
+  }
+  .muscleDetailStats{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
