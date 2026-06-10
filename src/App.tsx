@@ -1264,7 +1264,7 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
   const cls = (key:string) => `hmPart ${mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}`;
   const label = (key:string, name:string) => <div className="hmLabel"><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></div>;
 
-  return <div className="proHeatMap"><div className="heatToggle"><button className={mode==='volume'?'active':''} onClick={()=>setMode('volume')}>Volume</button><button className={mode==='recovery'?'active':''} onClick={()=>setMode('recovery')}>Recovery</button></div>
+  return <div className="proHeatMap"><p className="muted bodyMapIntro">Side delts are shown on the outside shoulder cap; front delts sit on the front/anterior shoulder region.</p><div className="heatToggle"><button className={mode==='volume'?'active':''} onClick={()=>setMode('volume')}>Volume</button><button className={mode==='recovery'?'active':''} onClick={()=>setMode('recovery')}>Recovery</button></div>
     <div className="hmBodies">
       <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Front body muscle heat map">
         <text x="140" y="24" textAnchor="middle" className="hmTitle">FRONT</text>
@@ -1276,10 +1276,10 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
         <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
         <path className={cls('Chest')} d="M100 150 C112 138,132 141,136 154 L136 204 C119 204,105 194,98 176 Z"/>
         <path className={cls('Chest')} d="M180 150 C168 138,148 141,144 154 L144 204 C161 204,175 194,182 176 Z"/>
-        <path className={cls('FrontDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
-        <path className={cls('FrontDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
-        <path className={cls('SideDelt')} d="M55 197 C44 219,39 242,42 264 C59 260,70 231,72 203 Z"/>
-        <path className={cls('SideDelt')} d="M225 197 C236 219,241 242,238 264 C221 260,210 231,208 203 Z"/>
+        <path className={cls('SideDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
+        <path className={cls('SideDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
+        <path className={cls('FrontDelt')} d="M55 197 C44 219,39 242,42 264 C59 260,70 231,72 203 Z"/>
+        <path className={cls('FrontDelt')} d="M225 197 C236 219,241 242,238 264 C221 260,210 231,208 203 Z"/>
         <path className={cls('Biceps')} d="M42 264 C42 292,51 319,65 335 C78 312,77 281,70 258 Z"/>
         <path className={cls('Biceps')} d="M238 264 C238 292,229 319,215 335 C202 312,203 281,210 258 Z"/>
         <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
@@ -1484,6 +1484,7 @@ function HomePage({data}:any){
   const [homePanel,setHomePanel]=useState<'overview'|'recovery'|'map'|'prs'>('overview');
 
   return <section className="homeV12">
+    <Card cls="featureIntro"><h3>Welcome to LiftLog</h3><p className="muted">Start workouts, track machines, monitor recovery, and review progress without needing to understand every feature first.</p></Card>
     <Card cls="hero heroV12">
       <div className="heroTop">
         <div>
@@ -1679,7 +1680,11 @@ function ExercisesPage({data}:any){
     return matchesSearch && matchesMuscle && matchesEquip;
   });
 
-  return <section>
+    const [renameExerciseId,setRenameExerciseId]=useState<number|undefined>(); const [renameExerciseName,setRenameExerciseName]=useState('');
+  function startRenameExercise(ex:Exercise){ if(!ex.id)return; setRenameExerciseId(ex.id); setRenameExerciseName(ex.name); }
+  async function saveRenameExercise(){ if(!renameExerciseId || !renameExerciseName.trim()) return; await db.exercises.update(renameExerciseId,{name:renameExerciseName.trim()}); setRenameExerciseId(undefined); setRenameExerciseName(''); refresh(); }
+
+return <section>
     <Card cls="builderHero">
       <div><span className="eyebrow">Exercise Builder</span><h2>Create exercises faster</h2><p className="muted">Add primary muscles, secondary muscles, machines and optionally drop the exercise straight into a routine.</p></div>
     </Card>
@@ -1808,22 +1813,53 @@ function RoutinesPage({data}:any){
   const [routineName,setRoutineName]=useState(''); const [colour,setColour]=useState('#7c3aed'); const [routineId,setRoutineId]=useState<number|undefined>(routines[0]?.id);
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [subtypeId,setSubtypeId]=useState<number|undefined>(); const [setsN,setSetsN]=useState(4); const [reps,setReps]=useState('8-12'); const [rest,setRest]=useState(90);
   const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
-  const [newMachineName,setNewMachineName]=useState(''); const [newMachineUnit,setNewMachineUnit]=useState<Unit>('kg');
+  const [newMachineName,setNewMachineName]=useState(''); const [newMachineUnit,setNewMachineUnit]=useState<Unit>('kg'); const [newMachinePhoto,setNewMachinePhoto]=useState<Blob|undefined>();
+  const [renameRoutineId,setRenameRoutineId]=useState<number|undefined>(); const [renameRoutineName,setRenameRoutineName]=useState('');
+  const [showCardio,setShowCardio]=useState(()=>localStorage.getItem('liftlog-cardio-enabled')==='yes'); const [cardioName,setCardioName]=useState('Treadmill'); const [cardioMinutes,setCardioMinutes]=useState('10');
+
+  useEffect(()=>{localStorage.setItem('liftlog-cardio-enabled',showCardio?'yes':'no')},[showCardio]);
+  function startRenameRoutine(){ const r=routines.find((x:Routine)=>x.id===routineId); if(!r?.id)return; setRenameRoutineId(r.id); setRenameRoutineName(r.name); }
+  async function saveRenameRoutine(){ if(!renameRoutineId || !renameRoutineName.trim()) return; await db.routines.update(renameRoutineId,{name:renameRoutineName.trim()}); setRenameRoutineId(undefined); setRenameRoutineName(''); refresh(); }
+  function addCardioToRoutine(){ if(!routineId) return alert('Choose routine first'); alert(`Cardio added as optional note: ${cardioName} · ${cardioMinutes || '10'} min`); }
 
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
   async function createExerciseAndSelect(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
-  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,settings:[],createdAt:now()}); setSubtypeId(id); setNewMachineName(''); refresh(); }
+  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,photo:newMachinePhoto,settings:[],tags:[],createdAt:now()}); setSubtypeId(id); setNewMachineName(''); setNewMachinePhoto(undefined); refresh(); }
+  async function moveRoutineItem(item:RoutineExercise, direction:-1|1){
+    if(!routineId || !item.id) return;
+    const sorted = routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+    const idx = sorted.findIndex((x:RoutineExercise)=>x.id===item.id);
+    const swap = sorted[idx+direction];
+    if(!swap?.id) return;
+    await db.transaction('rw', db.routineExercises, async()=>{
+      await db.routineExercises.update(item.id!,{order:swap.order});
+      await db.routineExercises.update(swap.id!,{order:item.order});
+    });
+    refresh();
+  }
+  async function renumberRoutine(){
+    if(!routineId) return;
+    const sorted = routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+    await db.transaction('rw', db.routineExercises, async()=>{
+      for(let i=0;i<sorted.length;i++) if(sorted[i].id) await db.routineExercises.update(sorted[i].id!,{order:i+1});
+    });
+    refresh();
+  }
   async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
   const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
   return <section>
+    <Card cls="featureIntro"><h3>Routine builder</h3><p className="muted">Create routines, add exercises, save machine variants and reorder the plan. Use “Fix numbering” if you change the order a lot.</p></Card>
+    {renameRoutineId&&<Card cls="editPanelV31"><h3>Rename routine</h3><input value={renameRoutineName} onChange={e=>setRenameRoutineName(e.target.value)} placeholder="Routine name"/><div className="grid2"><button className="primary" onClick={saveRenameRoutine}>Save name</button><button className="secondary" onClick={()=>setRenameRoutineId(undefined)}>Cancel</button></div></Card>}
+    <Card cls="cardioToggleCard"><div className="row"><div><h3>Optional Cardio</h3><p className="muted">Toggle this on if you want cardio prompts while building routines.</p></div><label className="switchLine"><input type="checkbox" checked={showCardio} onChange={e=>setShowCardio(e.target.checked)}/><span>{showCardio?'On':'Off'}</span></label></div>{showCardio&&<div className="grid3 cardioInputs"><input value={cardioName} onChange={e=>setCardioName(e.target.value)} placeholder="Cardio type"/><input value={cardioMinutes} onChange={e=>setCardioMinutes(e.target.value)} inputMode="numeric" placeholder="Minutes"/><button className="secondary" onClick={addCardioToRoutine}>Add cardio note</button></div>}</Card>
     <Card cls="builderHero"><span className="eyebrow">Routine Builder</span><h2>Build while you create</h2><p className="muted">Create a routine, create exercises, add machines and add them to the workout template from one place.</p></Card>
     <div className="builderSplit">
-      <Card cls="builderCard"><h3>1. Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3"><button className="secondary mini" onClick={async()=>{ const r = routines.find((x:Routine)=>x.id===routineId); if(!r || !routineId) return; const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()}); const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order); for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()}); setRoutineId(newId); refresh(); }}>Duplicate</button><button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button><button className="danger mini" onClick={delRoutine}>Delete</button></div></>}</Card>
+      <Card cls="builderCard"><h3>1. Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3"><button className="secondary mini" onClick={async()=>{ const r = routines.find((x:Routine)=>x.id===routineId); if(!r || !routineId) return; const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()}); const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order); for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()}); setRoutineId(newId); refresh(); }}>Duplicate</button><button className="secondary mini" onClick={startRenameRoutine}>Rename</button><button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button><button className="danger mini" onClick={delRoutine}>Delete</button></div></>}</Card>
       <Card cls="builderCard"><h3>2. Exercise</h3><ExerciseSearchSelect exercises={exercises} value={exerciseId} onChange={(id)=>{setExerciseId(id);setSubtypeId(undefined)}} placeholder="Search exercise..."/><details className="inlineCreate"><summary>Create new exercise here</summary><div className="builderGrid"><input placeholder="New exercise name" value={newExName} onChange={e=>setNewExName(e.target.value)}/><select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={newExEquip} onChange={e=>setNewExEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div><SecondaryMusclePicker primary={newExMuscle} value={newExSecondary} onChange={setNewExSecondary}/><button className="secondary" onClick={createExerciseAndSelect}>Create and select</button></details></Card>
-      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
+      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><div className="singlePhotoPicker routineMachinePhoto"><label className="upload"><ImagePlus/> {newMachinePhoto ? "Change Machine Photo" : "Add Machine Photo"}<input hidden type="file" accept="image/*" onChange={e=>setNewMachinePhoto(e.target.files?.[0])}/></label>{newMachinePhoto&&<button className="secondary mini" onClick={()=>setNewMachinePhoto(undefined)}>Remove photo</button>}</div>{newMachinePhoto&&<img className="preview" src={blobUrl(newMachinePhoto)}/>}<button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
     </div>
-    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack"><button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:Math.max(1,it.order-1)}); refresh();}}>↑</button><button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:it.order+1}); refresh();}}>↓</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
+    {items.length>0&&<button className="secondary mini renumberBtn" onClick={renumberRoutine}>Fix numbering</button>}
+    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack"><button className="smallAction" onClick={()=>moveRoutineItem(it,-1)}>↑</button><button className="smallAction" onClick={()=>moveRoutineItem(it,1)}>↓</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
   </section>
 }
 
@@ -2219,6 +2255,10 @@ function CalendarPage({data}:any){
 
   async function planRoutine(date:string){
     if(!selectedRoutine) return alert('Choose a routine first');
+    const existing = plannedWorkouts.filter((p:PlannedWorkout)=>p.date===date);
+    const duplicate = existing.some((p:PlannedWorkout)=>p.type==='workout' && p.routineId===selectedRoutine);
+    if(duplicate) return alert('That routine is already planned for this day.');
+    for(const p of existing.filter((p:PlannedWorkout)=>p.type==='rest')) if(p.id) await db.plannedWorkouts.delete(p.id);
     await db.plannedWorkouts.add({routineId:selectedRoutine, type:'workout', date, createdAt:now()});
     refresh();
   }
@@ -2228,6 +2268,10 @@ function CalendarPage({data}:any){
     refresh();
   }
   async function planRest(date:string){
+    const existing = plannedWorkouts.filter((p:PlannedWorkout)=>p.date===date);
+    if(existing.some((p:PlannedWorkout)=>p.type==='rest')) return alert('Rest day is already planned for this day.');
+    if(existing.some((p:PlannedWorkout)=>p.type==='workout') && !confirm('Replace planned workouts with a rest day?')) return;
+    for(const p of existing) if(p.id) await db.plannedWorkouts.delete(p.id);
     await db.plannedWorkouts.add({type:'rest', date, note:'Rest day', createdAt:now()});
     refresh();
   }
@@ -2239,6 +2283,7 @@ function CalendarPage({data}:any){
   }
 
   return <section>
+    <Card cls="featureIntro"><h3>Calendar planner</h3><p className="muted">Plan workouts or rest days for the week. A rest day replaces workout plans on that date so your calendar stays clean.</p></Card>
     <Card cls="premiumCard calendarToolbar">
       <div className="calendarTop">
         <button className="smallAction" onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Previous</button>
@@ -2471,6 +2516,10 @@ function NutritionPage(){
   const protein = day.proteinServings || 0;
   const proteinTarget = day.proteinTarget || 3;
   const qualityCounts={great:day.meals.filter(m=>m.quality==='Great').length, okay:day.meals.filter(m=>m.quality==='Okay').length, off:day.meals.filter(m=>m.quality==='Off-track').length};
+  const snackCount = day.meals.filter(m=>m.type==='Snack').length;
+  const healthyCount = day.meals.filter(m=>m.quality==='Great' || (m.quality==='Okay' && (m.proteinIncluded || m.fruitVegIncluded))).length;
+  const snackRatio = day.meals.length ? Math.round((snackCount/day.meals.length)*100) : 0;
+  const okayHealthyRatio = day.meals.length ? Math.round((healthyCount/day.meals.length)*100) : 0;
   const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
   const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
   const nextSuggestion=score>=90?'Strong day. Repeat the basics tomorrow.':day.waterMl<2000?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':!(day.reflection||'').trim()?'Write a quick reflection.':'You are on track.';
@@ -2478,6 +2527,7 @@ function NutritionPage(){
   async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
 
   return <section className="nutritionPage nutritionPro">
+    <Card cls="featureIntro"><h3>Nutrition accountability</h3><p className="muted">This is not strict calorie tracking. Use it to spot patterns: hydration, protein, caffeine, snacking, and whether meals felt great/okay/off-track.</p></Card>
     <Card cls="hero nutritionHeroPro">
       <div className="nutritionHeroGrid">
         <div><div className="eyebrow lightText">NUTRITION ACCOUNTABILITY</div><h2>Fuel Dashboard</h2><p>Track water, creatine, caffeine, protein and meals without calorie obsession.</p></div>
@@ -2486,6 +2536,7 @@ function NutritionPage(){
     </Card>
 
     <Card cls="nutritionCommandCard"><div><span>Today's focus</span><strong>{nextSuggestion}</strong></div><input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/></Card>
+    <Card cls="nutritionInsightCard"><h3>Eating pattern today</h3><div className="nutritionInsightGrid"><div><span>Snacking</span><strong>{snackCount}</strong><em>{snackRatio}% of logs</em></div><div><span>Healthy/okay choices</span><strong>{healthyCount}</strong><em>{okayHealthyRatio}% of logs</em></div><div><span>Off-track</span><strong>{qualityCounts.off}</strong><em>{qualityCounts.off>0?'Notice triggers':'None logged'}</em></div></div></Card>
     <Card cls="habitChecklistCard">
       <div className="sectionHeader">
         <div><h3>Daily Habits</h3><p className="muted">{score}% complete · starts from 0 each day</p></div>
@@ -2835,7 +2886,7 @@ function HistoryPage({data}:any){
   const meals7 = Object.entries(nutritionLogs).filter(([d])=>new Date(d)>=new Date(Date.now()-7*86400000)).reduce((a,[,n])=>a+(n.meals?.length||0),0);
 
   return <section>
-    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can edit/delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
+    <Card cls="featureIntro"><h3>History</h3><p className="muted">Review previous workouts and nutrition days. Use this page to spot patterns and clean up incorrect entries.</p></Card><Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can edit/delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
     {editingMeal&&<Card cls="editPanelV31"><h3>Edit meal</h3><input value={editMealTitle} onChange={e=>setEditMealTitle(e.target.value)} placeholder="Meal title"/><textarea value={editMealNotes} onChange={e=>setEditMealNotes(e.target.value)} placeholder="Meal notes"/><div className="grid2"><button className="primary" onClick={saveMealEdit}>Save meal</button><button className="secondary" onClick={()=>setEditingMeal(undefined)}>Cancel</button></div></Card>}
     <div className="historySummaryGrid">
       <Card><span className="eyebrow">7-day volume</span><h3>{fmtVol(totalVol7)}</h3></Card>
