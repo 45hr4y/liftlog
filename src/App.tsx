@@ -1481,6 +1481,7 @@ function HomePage({data}:any){
   const prs = recentPRItems(exercises, sets);
   const recommended = recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets);
   const recoveryMuscles = ['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'];
+  const [homePanel,setHomePanel]=useState<'overview'|'recovery'|'map'|'prs'>('overview');
 
   return <section className="homeV12">
     <Card cls="hero heroV12">
@@ -1503,39 +1504,48 @@ function HomePage({data}:any){
       <button onClick={()=>setPage('routines')}>Routines</button>
     </div>
 
-    <div className="dashboardGrid">
-      <Card cls="glassMetric">
-        <span>Weekly Volume</span>
-        <strong>{fmtVol(vol)}</strong>
-        <em>{weekSets.length} sets this week</em>
-      </Card>
-      <Card cls="glassMetric">
-        <span>Workouts</span>
-        <strong>{weekWorkouts.length}</strong>
-        <em>this week</em>
-      </Card>
-      <Card cls="glassMetric">
-        <span>Library</span>
-        <strong>{exercises.length}</strong>
-        <em>{subtypes.length} machine subtypes</em>
-      </Card>
-      <Card cls="glassMetric">
-        <span>Routines</span>
-        <strong>{routines.length}</strong>
-        <em>templates saved</em>
-      </Card>
+    <div className="homePanelTabs">
+      <button className={homePanel==='overview'?'active':''} onClick={()=>setHomePanel('overview')}>Overview</button>
+      <button className={homePanel==='recovery'?'active':''} onClick={()=>setHomePanel('recovery')}>Recovery</button>
+      <button className={homePanel==='map'?'active':''} onClick={()=>setHomePanel('map')}>Body Map</button>
+      <button className={homePanel==='prs'?'active':''} onClick={()=>setHomePanel('prs')}>PRs</button>
     </div>
 
-    <Card cls="premiumCard recoveryV30">
+    {homePanel==='overview' && <div className="homePanel">
+      <div className="dashboardGrid">
+        <Card cls="glassMetric">
+          <span>Weekly Volume</span>
+          <strong>{fmtVol(vol)}</strong>
+          <em>{weekSets.length} sets this week</em>
+        </Card>
+        <Card cls="glassMetric">
+          <span>Workouts</span>
+          <strong>{weekWorkouts.length}</strong>
+          <em>this week</em>
+        </Card>
+        <Card cls="glassMetric">
+          <span>Library</span>
+          <strong>{exercises.length}</strong>
+          <em>{subtypes.length} machine subtypes</em>
+        </Card>
+        <Card cls="glassMetric">
+          <span>Routines</span>
+          <strong>{routines.length}</strong>
+          <em>templates saved</em>
+        </Card>
+      </div>
+      {recommended&&<Card cls="recommendedTrain">
+        <span>Recommended today</span>
+        <strong>{recommended.routine.name}</strong>
+        <em>{recommended.score}% average readiness</em>
+      </Card>}
+    </div>}
+
+    {homePanel==='recovery' && <Card cls="premiumCard recoveryV30 homePanel">
       <div className="sectionHeader">
         <div><h3>Recovery Status</h3><p className="muted">Based on when each muscle was last trained and recent volume.</p></div>
         <button className="textBtn" onClick={()=>setPage('stats')}>Details</button>
       </div>
-      {recommended&&<div className="recommendedTrain">
-        <span>Recommended today</span>
-        <strong>{recommended.routine.name}</strong>
-        <em>{recommended.score}% average readiness</em>
-      </div>}
       <div className="recoveryStatusGrid">
         {recoveryMuscles.map(m=>{
           const rec = recoveryForMuscleFromHistory(m,exercises,workouts,sets);
@@ -1553,18 +1563,17 @@ function HomePage({data}:any){
         <span><i className="recDot recYellow"></i>51–75% Almost ready</span>
         <span><i className="recDot recGreen"></i>76–100% Ready</span>
       </div>
-    </Card>
+    </Card>}
 
-    <Card cls="premiumCard">
+    {homePanel==='map' && <Card cls="premiumCard homePanel">
       <div className="sectionHeader">
         <h3>Weekly Body Heat Map</h3>
-        <span className="muted miniLabel">Volume intensity</span>
+        <span className="muted miniLabel">Volume / recovery</span>
       </div>
       <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} exercises={exercises} workouts={workouts} sets={sets} />
-      
-    </Card>
+    </Card>}
 
-    <Card cls="premiumCard">
+    {homePanel==='prs' && <Card cls="premiumCard homePanel">
       <div className="sectionHeader">
         <h3>Recent PR Signals</h3>
         <button className="textBtn" onClick={()=>setPage('stats')}>Progress</button>
@@ -1576,7 +1585,7 @@ function HomePage({data}:any){
           <span>{item.set.weight}{item.set.unit} × {item.set.reps} · e1RM {e1rm(kgValue(item.set), item.set.reps)}kg</span>
         </div>
       </div>) : <p className="muted">No sets logged yet. PRs will appear here after workouts.</p>}
-    </Card>
+    </Card>}
 
     <Card cls="premiumCard">
       <div className="sectionHeader">
@@ -1753,7 +1762,10 @@ function SubtypesPage({data}:any){
       </details>
       <input placeholder="e.g. Prime Lateral Raise" value={name} onChange={e=>setName(e.target.value)}/>
       <label>Default unit for this exact machine</label><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-      <label className="upload"><ImagePlus/> Add one machine photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setPhoto(e.target.files?.[0])}/></label>{photo&&<img className="preview" src={blobUrl(photo)}/>}
+      <div className="photoChoiceGrid">
+        <label className="upload"><ImagePlus/> Take photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setPhoto(e.target.files?.[0])}/></label>
+        <label className="upload"><ImagePlus/> Upload from camera roll<input hidden type="file" accept="image/*" onChange={e=>setPhoto(e.target.files?.[0])}/></label>
+      </div>{photo&&<img className="preview" src={blobUrl(photo)}/>}
       <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><h4>Machine settings</h4><div className="builderGrid"><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}</div>
       <button className="secondary" onClick={addSetting}>Add Setting</button><Pills>{settings.map(s=><span key={s.id}>{s.label} · {s.type}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
     </Card>
@@ -1951,17 +1963,20 @@ function LogPage({data}:any){
     setAddExerciseId(undefined); setAddSubtypeId(undefined);
   }
   async function createVariantAndAdd(){
-    if(!addExerciseId) return alert('Choose exercise first');
+    const focusedRoutineItem = items.find((it:RoutineExercise)=>it.id===focusedItemId) || firstIncompleteItem || items[0];
+    const targetExerciseId = addExerciseId || focusedRoutineItem?.exerciseId;
+    if(!targetExerciseId) return alert('Choose an exercise first');
     if(!newVariantName.trim()) return alert('Enter a variant or machine name');
-    const subtypeId = await db.subtypes.add({exerciseId:addExerciseId,name:newVariantName.trim(),defaultUnit:newVariantUnit,photo:newVariantPhoto,settings:[],tags:newVariantTags,createdAt:now()});
+    const subtypeId = await db.subtypes.add({exerciseId:targetExerciseId,name:newVariantName.trim(),defaultUnit:newVariantUnit,photo:newVariantPhoto,settings:[],tags:newVariantTags,createdAt:now()});
     setAddSubtypeId(subtypeId);
     const nextOrder = customMode || !activeWorkout?.routineId 
       ? customItems.length+1 
       : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
-    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
-    if(activeWorkout?.routineId && !customMode){
+    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:targetExerciseId, subtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
+    const alreadyInWorkout = items.some((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
+    if(activeWorkout?.routineId && !customMode && !alreadyInWorkout){
       await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
-    } else {
+    } else if(!alreadyInWorkout) {
       setCustomItems([...customItems,item]);
     }
     setNewVariantName(''); setNewVariantPhoto(undefined); setNewVariantTag(''); setNewVariantTags([]); setAddExerciseId(undefined); setAddSubtypeId(undefined);
@@ -2004,12 +2019,15 @@ return <section className="workoutV15">
         <button className="secondary" onClick={addCustomExercise}>+ Add selected</button>
       </div>
       <details className="inlineCreate">
-        <summary>Create new machine variant during workout</summary>
+        <summary>Create new machine variant for selected/current exercise</summary>
         <input value={newVariantName} onChange={e=>setNewVariantName(e.target.value)} placeholder="Variant name e.g. Cybex Leg Extension"/>
         <select value={newVariantUnit} onChange={e=>setNewVariantUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-        <div className="tagComposer"><input value={newVariantTag} onChange={e=>setNewVariantTag(e.target.value)} placeholder="Quick tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=newVariantTag.trim(); if(t){setNewVariantTags([...newVariantTags,t]); setNewVariantTag('');}}}>Add tag</button></div><Pills>{newVariantTags.map(t=><span key={t}>#{t}</span>)}</Pills><label className="upload"><ImagePlus/> Add machine image<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
+        <div className="tagComposer"><input value={newVariantTag} onChange={e=>setNewVariantTag(e.target.value)} placeholder="Quick tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=newVariantTag.trim(); if(t){setNewVariantTags([...newVariantTags,t]); setNewVariantTag('');}}}>Add tag</button></div><Pills>{newVariantTags.map(t=><span key={t}>#{t}</span>)}</Pills><div className="photoChoiceGrid">
+          <label className="upload"><ImagePlus/> Take photo<input hidden type="file" accept="image/*" capture="environment" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
+          <label className="upload"><ImagePlus/> Upload from camera roll<input hidden type="file" accept="image/*" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
+        </div>
         {newVariantPhoto&&<img className="preview" src={blobUrl(newVariantPhoto)}/>}
-        <button className="primary" onClick={createVariantAndAdd}>Save variant + add to workout</button>
+        <button className="primary" onClick={createVariantAndAdd}>Save variant for future use</button>
       </details>
     </Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; const rep=replacements.find((r:WorkoutReplacement)=>r.workoutId===activeWorkout.id&&r.routineExerciseId===it.id);

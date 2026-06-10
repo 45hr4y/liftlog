@@ -372,3 +372,14 @@ Fixed:
 - Active workouts ignore already-ended workouts.
 - Hardened workout finish, logger, seed and page rendering paths.
 - Fixed stale Progress page navigation to use Stats.
+
+
+## v39 Streamlined Mobile Dashboard
+
+Added:
+- Home dashboard is now split into Overview / Recovery / Body Map / PRs tabs.
+- Reduced the long-scroll feeling on iPhone.
+- Recovery and body map sections are easier to view independently.
+- Machine photos now support both taking a photo and uploading from camera roll.
+- In-workout variant creation can use the current/focused exercise if no exercise is manually selected.
+- Variant button wording clarified: saving a machine variant is for future use.

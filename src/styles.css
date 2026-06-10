@@ -1781,3 +1781,76 @@ body[data-theme="dark"] .runtimeErrorCard{
   background:#1e293b;
   border-color:#9a3412;
 }
+
+
+/* LiftLog v39 Streamlined Mobile Dashboard */
+.homePanelTabs{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  position:sticky;
+  top:0;
+  z-index:12;
+  padding:8px;
+  border-radius:22px;
+  background:rgba(255,255,255,.86);
+  backdrop-filter:blur(18px);
+  margin:12px 0;
+}
+.homePanelTabs button{
+  border-radius:16px;
+  min-height:42px;
+  font-weight:950;
+  font-size:13px;
+  background:#f1f5f9;
+  color:#64748b;
+}
+.homePanelTabs button.active{
+  background:#0f172a;
+  color:#fff;
+}
+.homePanel{
+  animation:softPop .18s ease both;
+}
+.photoChoiceGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.photoChoiceGrid .upload{
+  margin:0;
+  min-height:50px;
+  justify-content:center;
+}
+body[data-theme="dark"] .homePanelTabs{
+  background:rgba(15,23,42,.86);
+}
+body[data-theme="dark"] .homePanelTabs button{
+  background:#1e293b;
+  color:#cbd5e1;
+}
+body[data-theme="dark"] .homePanelTabs button.active{
+  background:#f8fafc;
+  color:#0f172a;
+}
+@media(max-width:720px){
+  .homeV12{
+    padding-bottom:96px;
+  }
+  .homePanelTabs{
+    grid-template-columns:1fr 1fr;
+    top:6px;
+  }
+  .photoChoiceGrid{
+    grid-template-columns:1fr;
+  }
+  .recoveryStatusGrid{
+    max-height:62vh;
+    overflow:auto;
+    padding-right:4px;
+  }
+  .proHeatMap{
+    max-height:68vh;
+    overflow:auto;
+  }
+}
