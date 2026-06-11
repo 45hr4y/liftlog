@@ -1376,7 +1376,7 @@ function ExerciseSearchSelect({exercises,value,onChange,placeholder='Search exer
   const selected = exercises.find(e=>e.id===value);
   const [q,setQ]=useState(selected?.name || '');
   const [open,setOpen]=useState(false);
-  useEffect(()=>{ const s=exercises.find(e=>e.id===value); if(s) setQ(s.name); },[value, exercises.length]);
+  useEffect(()=>{ const s=exercises.find(e=>e.id===value); if(s) setQ(s.name); else if(value===undefined) setQ(''); },[value, exercises.length]);
   const results = exercises.filter(e => `${e.name} ${e.muscle} ${e.equipment}`.toLowerCase().includes(q.toLowerCase())).slice(0,8);
   return <div className="searchSelect">
     <input value={q} placeholder={placeholder} onFocus={()=>setOpen(true)} onChange={e=>{setQ(e.target.value);setOpen(true); if(!e.target.value) onChange(undefined)}}/>
