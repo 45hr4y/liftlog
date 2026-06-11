@@ -2478,3 +2478,207 @@ body[data-theme="dark"] .workoutMachinePhoto summary span {
     max-height: 280px;
   }
 }
+
+
+/* LiftLog v48 Machine Card + Fullscreen Photo Modal */
+.machineCardV48{
+  grid-template-columns:130px 1fr;
+  align-items:start;
+}
+.machineCardPhoto{
+  width:100%;
+  text-align:left;
+  background:transparent;
+  color:inherit;
+  padding:0;
+  display:grid;
+  gap:7px;
+}
+.machineCardPhoto img,
+.machineCardPhoto .placeholder{
+  width:128px;
+  height:128px;
+  object-fit:cover;
+  border-radius:22px;
+  border:1px solid rgba(148,163,184,.35);
+  box-shadow:0 12px 28px rgba(15,23,42,.12);
+}
+.machineCardPhoto span{
+  justify-self:start;
+  border-radius:999px;
+  padding:5px 9px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:11px;
+  font-weight:950;
+}
+.machineCardTags,
+.machineModalTags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:9px;
+}
+.machineCardTags span,
+.machineModalTags span{
+  border-radius:999px;
+  padding:6px 9px;
+  background:#fef3c7;
+  color:#92400e;
+  font-size:12px;
+  font-weight:950;
+}
+.workoutMachineCard{
+  width:100%;
+  display:grid;
+  grid-template-columns:112px 1fr;
+  gap:12px;
+  text-align:left;
+  align-items:center;
+  padding:12px;
+  margin:12px 0;
+  border-radius:22px;
+  border:1px solid #dbeafe;
+  background:linear-gradient(135deg,#eff6ff,#ffffff);
+  color:#0f172a;
+}
+.workoutMachineCard img,
+.workoutMachineCard .placeholder{
+  width:112px;
+  height:112px;
+  object-fit:cover;
+  border-radius:18px;
+  border:1px solid rgba(148,163,184,.35);
+}
+.workoutMachineCard strong{
+  display:block;
+  font-size:17px;
+  margin:3px 0;
+}
+.workoutMachineCard em{
+  display:block;
+  color:#64748b;
+  font-size:12px;
+  font-style:normal;
+  font-weight:850;
+}
+.machineModalBackdrop{
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  background:rgba(2,6,23,.82);
+  backdrop-filter:blur(12px);
+  display:grid;
+  place-items:center;
+  padding:18px;
+}
+.machineModal{
+  width:min(720px,100%);
+  max-height:92vh;
+  overflow:auto;
+  border-radius:30px;
+  background:#fff;
+  color:#0f172a;
+  padding:16px;
+  box-shadow:0 28px 80px rgba(0,0,0,.42);
+}
+.machineModalTop{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  margin-bottom:12px;
+}
+.machineModalTop h2{
+  margin:4px 0 2px;
+}
+.machineModalTop p{
+  margin:0;
+  color:#64748b;
+}
+.machineModalPhoto{
+  width:100%;
+  max-height:62vh;
+  object-fit:contain;
+  border-radius:24px;
+  background:#020617;
+  border:1px solid rgba(148,163,184,.25);
+}
+.machineModalEmpty{
+  min-height:260px;
+  display:grid;
+  place-items:center;
+  border-radius:24px;
+  background:#f1f5f9;
+  color:#64748b;
+  font-weight:950;
+}
+.machineModalInfo{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:12px;
+}
+.machineModalInfo div{
+  border-radius:18px;
+  padding:12px;
+  background:#f8fafc;
+}
+.machineModalInfo span{
+  display:block;
+  color:#64748b;
+  font-size:11px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.machineModalInfo strong{
+  display:block;
+  font-size:18px;
+  margin-top:4px;
+}
+body[data-theme="dark"] .machineCardPhoto span,
+body[data-theme="dark"] .workoutMachineCard{
+  background:#020617;
+  border-color:#1e3a8a;
+  color:#f8fafc;
+}
+body[data-theme="dark"] .machineModal{
+  background:#0f172a;
+  color:#f8fafc;
+}
+body[data-theme="dark"] .machineModalInfo div,
+body[data-theme="dark"] .machineModalEmpty{
+  background:#020617;
+}
+body[data-theme="dark"] .machineCardTags span,
+body[data-theme="dark"] .machineModalTags span{
+  background:#78350f;
+  color:#fde68a;
+}
+@media(max-width:720px){
+  .machineCardV48{
+    grid-template-columns:1fr;
+  }
+  .machineCardPhoto img,
+  .machineCardPhoto .placeholder{
+    width:100%;
+    height:210px;
+  }
+  .workoutMachineCard{
+    grid-template-columns:1fr;
+  }
+  .workoutMachineCard img,
+  .workoutMachineCard .placeholder{
+    width:100%;
+    height:230px;
+  }
+  .machineModal{
+    border-radius:26px;
+    padding:12px;
+    max-height:94vh;
+  }
+  .machineModalInfo{
+    grid-template-columns:1fr;
+  }
+}

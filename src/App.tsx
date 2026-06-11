@@ -102,6 +102,47 @@ const db = new LiftDB();
 const now = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0,10);
 const blobUrl = (b?: Blob) => b ? URL.createObjectURL(b) : undefined;
+type MachinePhotoDetails = {title:string; subtitle?:string; photo?:Blob; tags?:string[]; last?:WorkoutSet; best?:WorkoutSet};
+
+function bestSetForMachine(exerciseId:number, subtypeId:number|undefined, sets:WorkoutSet[]){
+  const rows = sets.filter(s=>s.exerciseId===exerciseId && (subtypeId?s.subtypeId===subtypeId:true));
+  if(!rows.length) return undefined;
+  return rows.slice().sort((a,b)=>e1rm(kgValue(b),b.reps)-e1rm(kgValue(a),a.reps))[0];
+}
+function lastSetForMachine(exerciseId:number, subtypeId:number|undefined, sets:WorkoutSet[]){
+  const rows = sets.filter(s=>s.exerciseId===exerciseId && (subtypeId?s.subtypeId===subtypeId:true));
+  if(!rows.length) return undefined;
+  return rows.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
+}
+function setSummary(s?:WorkoutSet){
+  return s ? `${s.weight}${s.unit} × ${s.reps}${s.rir!==undefined?` @${s.rir} RIR`:''}` : '—';
+}
+function MachinePhotoModal({details,onClose}:{details:MachinePhotoDetails;onClose:()=>void}){
+  useEffect(()=>{
+    const close=(e:KeyboardEvent)=>{ if(e.key==='Escape') onClose(); };
+    window.addEventListener('keydown',close);
+    return ()=>window.removeEventListener('keydown',close);
+  },[onClose]);
+  return <div className="machineModalBackdrop" onClick={onClose}>
+    <div className="machineModal" onClick={e=>e.stopPropagation()}>
+      <div className="machineModalTop">
+        <div>
+          <span className="eyebrow">Machine Card</span>
+          <h2>{details.title}</h2>
+          {details.subtitle&&<p>{details.subtitle}</p>}
+        </div>
+        <button className="iconBtn" onClick={onClose}>×</button>
+      </div>
+      {details.photo?<img className="machineModalPhoto" src={blobUrl(details.photo)}/>:<div className="machineModalEmpty">No machine photo yet</div>}
+      <div className="machineModalInfo">
+        <div><span>Last used</span><strong>{setSummary(details.last)}</strong></div>
+        <div><span>Best set</span><strong>{setSummary(details.best)}</strong></div>
+      </div>
+      {details.tags?.length?<div className="machineModalTags">{details.tags.map(t=><span key={t}>#{t}</span>)}</div>:<p className="muted">Add tags like Seat 4, Back Pad 3, Grip Wide or Slow eccentric to make this card more useful.</p>}
+    </div>
+  </div>
+}
+
 const kgValue = (s: WorkoutSet) => (s.unit === 'kg' ? s.weight : s.weight / 2.2046226218);
 const volumeKg = (s: WorkoutSet) => kgValue(s) * s.reps;
 const fmtVol = (n: number) => `${Math.round(n).toLocaleString()} kg`;
@@ -1829,7 +1870,7 @@ function SubtypesPage({data}:any){
   const {exercises,subtypes,refresh}=data;
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>(); const [tagInput,setTagInput]=useState(''); const [tags,setTags]=useState<string[]>([]);
   const [settings,setSettings]=useState<MachineSetting[]>([]); const [label,setLabel]=useState(''); const [type,setType]=useState<SettingType>('dropdown'); const [opts,setOpts]=useState('1,2,3,4,5');
-  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine'); const [savedMsg,setSavedMsg]=useState('');
+  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine'); const [savedMsg,setSavedMsg]=useState(''); const [photoModal,setPhotoModal]=useState<MachinePhotoDetails|undefined>();
 
   function addSetting(){ if(!label.trim())return; setSettings([...settings,{id:crypto.randomUUID(),label:label.trim(),type,options:type==='dropdown'?opts.split(',').map(x=>x.trim()):undefined,defaultValue:type==='checkbox'?false:''}]); setLabel(''); }
   function addTag(){ const t=tagInput.trim(); if(!t)return; setTags([...tags,t]); setTagInput(''); }
@@ -1863,7 +1904,8 @@ function SubtypesPage({data}:any){
       </div>{photo&&<img className="preview" src={blobUrl(photo)}/>}
       <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
     </Card>
-    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<details className="machinePhotoExpand"><summary><img src={blobUrl(s.photo)}/><em>Tap to expand</em></summary><img src={blobUrl(s.photo)} className="machinePhotoLarge"/></details>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}</Pills></div></Card>})}
+    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine machineCardV48"><button className="machineCardPhoto" onClick={()=>setPhotoModal({title:s.name,subtitle:ex?.name,photo:s.photo,tags:s.tags,last:undefined,best:undefined})}>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}<span>View Photo</span></button><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<div className="machineCardTags"><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}</div></div></Card>})}
+    {photoModal&&<MachinePhotoModal details={photoModal} onClose={()=>setPhotoModal(undefined)}/>}
   </section>
 }
 
@@ -2196,12 +2238,14 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
   workouts = Array.isArray(workouts) ? workouts : [];
   sets = Array.isArray(sets) ? sets : [];
   const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
-  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false); const [machineName,setMachineName]=useState(''); const [machineUnit,setMachineUnit]=useState<Unit>(defaultUnit); const [machinePhoto,setMachinePhoto]=useState<Blob|undefined>(); const [machineTag,setMachineTag]=useState(''); const [machineTags,setMachineTags]=useState<string[]>([]); const [machineSaved,setMachineSaved]=useState('');
+  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false); const [machineName,setMachineName]=useState(''); const [machineUnit,setMachineUnit]=useState<Unit>(defaultUnit); const [machinePhoto,setMachinePhoto]=useState<Blob|undefined>(); const [machineTag,setMachineTag]=useState(''); const [machineTags,setMachineTags]=useState<string[]>([]); const [machineSaved,setMachineSaved]=useState(''); const [photoModal,setPhotoModal]=useState<MachinePhotoDetails|undefined>();
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
   if(missingLoggerData) return <Card cls="loggerV15"><p className="muted">This exercise could not be loaded safely.</p></Card>;
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
   const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
   const exerciseComplete = todaySets.length >= item.sets;
+  const machineLast = lastSetForMachine(ex.id, subtype?.id, sets);
+  const machineBest = bestSetForMachine(ex.id, subtype?.id, sets);
 
   function targetForSet(n:number){
     const p=prev.find((x:WorkoutSet)=>x.setNumber===n);
@@ -2283,7 +2327,10 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
       {swapOpen&&<div className="swapChoices">
         {suggestedReplacementsFor(originalEx||ex, allExercises||[]).map((s:Exercise)=><button key={s.id} onClick={()=>applySwap(s.id!)}><strong>{s.name}</strong><span>{s.muscle} · {(s.secondaryMuscles||[]).join(', ')}</span></button>)}
       </div>}
-      <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>{subtype?.photo&&<details className="workoutMachinePhoto"><summary><img src={blobUrl(subtype.photo)}/><span>Tap to expand machine photo</span></summary><img className="machinePhotoLarge" src={blobUrl(subtype.photo)}/></details>}
+      <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>{subtype&&<button className="workoutMachineCard" onClick={()=>setPhotoModal({title:subtype.name,subtitle:ex.name,photo:subtype.photo,tags:subtype.tags,last:machineLast,best:machineBest})}>
+        {subtype.photo?<img src={blobUrl(subtype.photo)}/>:<div className="placeholder">No photo</div>}
+        <div><span className="eyebrow">Machine Card</span><strong>{subtype.name}</strong><em>Last: {setSummary(machineLast)} · Best: {setSummary(machineBest)}</em>{subtype.tags?.length?<Pills>{subtype.tags.map((t:string)=><span key={t}>#{t}</span>)}</Pills>:null}</div>
+      </button>}
       <details className="inlineCreate workoutInlineMachineCreator">
         <summary>+ Add machine for {ex.name}</summary>
         <input value={machineName} onChange={e=>setMachineName(e.target.value)} placeholder={`Machine name for ${ex.name}`}/>
@@ -2318,6 +2365,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
       </div>
       <button className="secondary mini" onClick={()=>setExtra(extra+1)}>+ Add Set</button>
     </details>
+    {photoModal&&<MachinePhotoModal details={photoModal} onClose={()=>setPhotoModal(undefined)}/>}
   </Card>
 }
 function CalendarPage({data}:any){
