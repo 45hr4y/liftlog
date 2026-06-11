@@ -2377,83 +2377,104 @@ body[data-theme="dark"] .timelineRest{
 }
 
 
-/* LiftLog v47 First-Day UX Polish */
+/* LiftLog v47.3 Stable First-Day UX Patch */
+.machinePhotoExpand {
+  width: 100%;
+}
 .machinePhotoExpand summary,
-.workoutMachinePhoto summary{
-  list-style:none;
-  cursor:pointer;
-  display:grid;
-  gap:6px;
+.workoutMachinePhoto summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
 }
 .machinePhotoExpand summary::-webkit-details-marker,
-.workoutMachinePhoto summary::-webkit-details-marker{
-  display:none;
+.workoutMachinePhoto summary::-webkit-details-marker {
+  display: none;
 }
 .machinePhotoExpand summary img,
-.machine .machinePhotoExpand summary img{
-  width:96px!important;
-  height:96px!important;
-  object-fit:cover;
-  border-radius:18px;
+.machine .machinePhotoExpand summary img {
+  width: 112px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 .machinePhotoExpand summary em,
-.workoutMachinePhoto summary span{
-  font-size:11px;
-  color:#64748b;
-  font-style:normal;
-  font-weight:900;
+.workoutMachinePhoto summary span {
+  font-size: 11px;
+  color: #64748b;
+  font-style: normal;
+  font-weight: 900;
 }
-.machinePhotoLarge{
-  width:100%!important;
-  max-height:72vh;
-  object-fit:contain;
-  border-radius:22px;
-  margin-top:10px;
-  background:#020617;
+.machinePhotoLarge {
+  width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: 22px;
+  margin-top: 10px;
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.22);
 }
-.workoutMachinePhoto{
-  margin:10px 0;
+.workoutMachinePhoto {
+  margin: 12px 0;
 }
-.workoutMachinePhoto summary{
-  border:1px solid #dbeafe;
-  border-radius:18px;
-  padding:10px;
-  background:#eff6ff;
+.workoutMachinePhoto summary {
+  border: 1px solid #dbeafe;
+  border-radius: 20px;
+  padding: 10px;
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
 }
-.workoutMachinePhoto summary img{
-  width:100%;
-  max-height:220px;
-  object-fit:cover;
-  border-radius:16px;
+.workoutMachinePhoto summary img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 16px;
 }
-.workoutInlineMachineCreator{
-  margin:10px 0;
-  border:1px dashed #93c5fd;
-  border-radius:18px;
-  padding:10px;
-  background:#f8fafc;
+.workoutInlineMachineCreator {
+  margin: 12px 0;
+  border: 1px dashed #93c5fd;
+  border-radius: 20px;
+  padding: 12px;
+  background: #f8fafc;
 }
-.inlineHint{
-  margin-top:10px;
-  border-radius:16px;
-  background:#f8fafc;
-  padding:10px 12px;
+.workoutInlineMachineCreator summary {
+  cursor: pointer;
+  font-weight: 950;
+}
+.inlineHint {
+  margin-top: 10px;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 10px 12px;
 }
 .builderCard .preview,
-.workoutInlineMachineCreator .preview{
-  max-height:240px;
-  object-fit:contain;
-}
-.saveSuccessInline{
-  animation:savePop .22s ease both;
-}
-@keyframes savePop{
-  from{opacity:0;transform:translateY(6px) scale(.98)}
-  to{opacity:1;transform:none}
+.workoutInlineMachineCreator .preview,
+.singlePhotoPicker + .preview {
+  max-height: 260px;
+  width: 100%;
+  object-fit: contain;
+  border-radius: 18px;
+  background: #020617;
 }
 body[data-theme="dark"] .workoutInlineMachineCreator,
 body[data-theme="dark"] .inlineHint,
-body[data-theme="dark"] .workoutMachinePhoto summary{
-  background:#020617;
-  border-color:#1e3a8a;
+body[data-theme="dark"] .workoutMachinePhoto summary {
+  background: #020617;
+  border-color: #1e3a8a;
+}
+body[data-theme="dark"] .machinePhotoExpand summary em,
+body[data-theme="dark"] .workoutMachinePhoto summary span {
+  color: #cbd5e1;
+}
+@media (max-width: 720px) {
+  .machinePhotoExpand summary img,
+  .machine .machinePhotoExpand summary img {
+    width: 128px;
+    height: 128px;
+  }
+  .workoutMachinePhoto summary img {
+    max-height: 280px;
+  }
 }
