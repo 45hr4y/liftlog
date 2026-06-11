@@ -2682,3 +2682,56 @@ body[data-theme="dark"] .machineModalTags span{
     grid-template-columns:1fr;
   }
 }
+
+
+/* LiftLog v49 Calendar Start + iPhone Reorder Polish */
+.plannedEventV15.completedReplacement{
+  border-style:solid;
+}
+.mobileMoveBtns{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:6px;
+}
+.mobileMoveBtns button{
+  min-height:34px;
+  border-radius:11px;
+  padding:7px 8px;
+  font-size:11px;
+  font-weight:950;
+}
+.mobileMoveBtns .startPlannedBtn{
+  grid-column:1/-1;
+  background:#dcfce7;
+  color:#166534;
+}
+.reorderStack{
+  min-width:104px;
+}
+.moveAction{
+  width:100%;
+  min-height:36px!important;
+  white-space:nowrap;
+}
+@media(max-width:720px){
+  .planMoveBtns.mobileMoveBtns{
+    grid-template-columns:1fr;
+  }
+  .mobileMoveBtns button{
+    min-height:40px;
+    font-size:12px;
+  }
+  .routineItemPro .row{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  .reorderStack{
+    display:grid;
+    grid-template-columns:1fr 1fr auto;
+    width:100%;
+    margin-top:8px;
+  }
+  .moveAction{
+    min-height:42px!important;
+  }
+}

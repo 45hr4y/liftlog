@@ -1199,6 +1199,13 @@ export default function App() {
   useEffect(()=>{ seed().then(async()=>{ await refresh(); const saved=localStorage.getItem('liftlog-active-workout-id'); if(saved){ const w=await db.workouts.get(Number(saved)); if(w && !w.endedAt) setActiveWorkoutId(Number(saved)); } }); },[]);
   useEffect(()=>{ document.body.dataset.theme = settings.theme; },[settings.theme]);
   const activeWorkout = workouts.find(w=>w.id===activeWorkoutId);
+  async function startRoutineWorkout(routineId:number, date=today()){
+    const r=routines.find((x:Routine)=>x.id===routineId);
+    const id=await db.workouts.add({routineId,title:r?.name||'Workout',date,startedAt:now()});
+    setActiveWorkoutId(id as number);
+    setPage('log');
+    await refresh();
+  }
 
   return <div className="shell">
     <header className="topbar">
@@ -1209,13 +1216,13 @@ export default function App() {
       <PageCrashGuard>
       {runtimeError&&<Card cls="runtimeErrorCard"><h3>LiftLog recovered from an error</h3><p>{runtimeError}</p><div className="grid3"><button className="primary" onClick={()=>setRuntimeError('')}>Dismiss</button><button className="secondary" onClick={()=>{clearStuckLiftLogState(); setActiveWorkoutId(undefined); setPage('home'); setRuntimeError('');}}>Safe Home</button><button className="secondary" onClick={emergencyExportLocalData}>Emergency Backup</button></div></Card>}
       {showOnboarding && <OnboardingCard onDone={()=>{localStorage.setItem('liftlog-onboarded-v31','yes'); setShowOnboarding(false);}} setPage={setPage}/>} 
-      {page==='home' && <HomePage data={{exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts,setPage}} />}
+      {page==='home' && <HomePage data={{exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts,setPage,startRoutineWorkout}} />}
       {page==='exercises' && <ExercisesPage data={{exercises,subtypes,sets,workouts,routines,routineExercises,refresh,setPage,setSelectedExerciseId}} />}
       {page==='exerciseDetail' && (selectedExerciseId ? <ExerciseDetailPage data={{selectedExerciseId,exercises,subtypes,workouts,sets,setPage}} /> : <EmptyState title="Exercise not selected" body="Go back to the Exercise Library and choose an exercise again." action={<button className="primary" onClick={()=>setPage('exercises')}>Open exercises</button>} />)}
       {page==='subtypes' && <SubtypesPage data={{exercises,subtypes,refresh}} />}
       {page==='routines' && <RoutinesPage data={{exercises,subtypes,routines,routineExercises,refresh}} />}
       {page==='log' && <LogPage data={{settings,exercises,subtypes,routines,routineExercises,workouts,sets,replacements,activeWorkout,setActiveWorkoutId,refresh}} />}
-      {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage}} />}
+      {page==='calendar' && <CalendarPage data={{routines,workouts,sets,plannedWorkouts,refresh,setPage,startRoutineWorkout}} />}
       {page==='history' && <HistoryPage data={{exercises,subtypes,routines,workouts,sets,replacements,refresh}} />}
       {page==='nutrition' && <NutritionPage />}
       {page==='more' && <MorePage data={{setPage,exercises,subtypes,routines}} />}
@@ -1544,12 +1551,14 @@ function FeatureHelp({title,children}:{title:string;children:React.ReactNode}) {
 }
 
 function HomePage({data}:any){
-  const {exercises,subtypes,routines,routineExercises,workouts,sets,setPage}=data;
+  const {exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts=[],setPage,startRoutineWorkout}=data;
   const weekWorkouts = workoutsThisWeek(workouts);
   const weekSets = sets.filter((s:WorkoutSet)=>weekWorkouts.some((w:Workout)=>w.id===s.workoutId));
   const vol = weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
   const lastWorkout = workouts[0];
-  const suggestedRoutine = routines.find((r:Routine)=>!r.archived) || routines[0];
+  const todayPlan = plannedWorkouts.find((p:PlannedWorkout)=>p.date===today() && p.type!=='rest' && p.routineId && !workouts.some((w:Workout)=>w.date===today() && w.routineId===p.routineId && w.endedAt));
+  const scheduledRoutine = todayPlan?.routineId ? routines.find((r:Routine)=>r.id===todayPlan.routineId) : undefined;
+  const suggestedRoutine = scheduledRoutine || routines.find((r:Routine)=>!r.archived) || routines[0];
   const groups = groupVolumesForWeek(exercises, workouts, sets);
   const maxGroup = Math.max(...Object.values(groups), 1);
   const prs = recentPRItems(exercises, sets);
@@ -1572,11 +1581,11 @@ function HomePage({data}:any){
         <div>
           <div className="eyebrow lightText">TODAY</div>
           <h2>{suggestedRoutine ? suggestedRoutine.name : 'Ready to train?'}</h2>
-          <p>{lastWorkout ? `Last workout: ${lastWorkout.title} on ${lastWorkout.date}` : 'Build a routine and start your first session.'}</p>
+          <p>{scheduledRoutine ? `Scheduled today · tap Start to begin ${scheduledRoutine.name}` : (lastWorkout ? `Last workout: ${lastWorkout.title} on ${lastWorkout.date}` : 'Build a routine and start your first session.')}</p>
         </div>
         <div className="heroBadge">🔥</div>
       </div>
-      <button className="primary glowBtn" onClick={()=>setPage('log')}>Start Workout</button>
+      <button className="primary glowBtn" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? `Start ${scheduledRoutine?.name || 'Today\'s Workout'}` : 'Start Workout'}</button>
     </Card>
 
     <div className="homeWeeklyCards">
@@ -1584,7 +1593,7 @@ function HomePage({data}:any){
         <span className="eyebrow">CONTINUE LAST ROUTINE</span>
         <h3>{lastRoutine?.name || 'Start training'}</h3>
         <p className="muted">{lastWorkout ? `Last completed ${lastWorkout.date}` : 'Create or choose a routine to begin.'}</p>
-        <button className="primary" onClick={()=>setPage('log')}>Start</button>
+        <button className="primary" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? 'Start Scheduled' : 'Start'}</button>
       </Card>
       <Card cls="recoveryInsightCard">
         <span className="eyebrow">RECOVERY INSIGHTS</span>
@@ -1960,7 +1969,7 @@ function RoutinesPage({data}:any){
       <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><div className="singlePhotoPicker routineMachinePhoto"><label className="upload"><ImagePlus/> {newMachinePhoto ? "Change Machine Photo" : "Add Machine Photo"}<input hidden type="file" accept="image/*" onChange={e=>setNewMachinePhoto(e.target.files?.[0])}/></label>{newMachinePhoto&&<button className="secondary mini" onClick={()=>setNewMachinePhoto(undefined)}>Remove photo</button>}</div>{newMachinePhoto&&<img className="preview" src={blobUrl(newMachinePhoto)}/>}<button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
     </div>
     {items.length>0&&<button className="secondary mini renumberBtn" onClick={renumberRoutine}>Fix numbering</button>}
-    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack"><button className="smallAction" onClick={()=>moveRoutineItem(it,-1)}>↑</button><button className="smallAction" onClick={()=>moveRoutineItem(it,1)}>↓</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
+    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack reorderStack"><button className="smallAction moveAction" onClick={()=>moveRoutineItem(it,-1)}>Move up</button><button className="smallAction moveAction" onClick={()=>moveRoutineItem(it,1)}>Move down</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
   </section>
 }
 
@@ -2369,7 +2378,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
   </Card>
 }
 function CalendarPage({data}:any){
-  const {routines,workouts,sets,plannedWorkouts,refresh}=data;
+  const {routines,workouts,sets,plannedWorkouts,refresh,startRoutineWorkout}=data;
   const [weekStart,setWeekStart]=useState<Date>(mondayOfWeek(new Date()));
   const [selectedRoutine,setSelectedRoutine]=useState<number|undefined>(routines.find((r:Routine)=>!r.archived)?.id);
   const days=Array.from({length:7}).map((_,i)=>addDays(weekStart,i));
@@ -2423,14 +2432,15 @@ function CalendarPage({data}:any){
       {days.map(dayObj=>{
         const day=dateKey(dayObj);
         const ws=workouts.filter((w:Workout)=>w.date===day);
-        const plans=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day);
+        const completedRoutineIds=new Set(ws.filter((w:Workout)=>w.endedAt && w.routineId).map((w:Workout)=>w.routineId));
+        const plans=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day && !(p.type!=='rest' && p.routineId && completedRoutineIds.has(p.routineId)));
         return <Card key={day} cls={day===today()?'weekDay todayWeek':'weekDay'}>
           <div className="weekDayHead"><span>{dayObj.toLocaleDateString([], {weekday:'short'})}</span><strong>{dayObj.getDate()}</strong></div>
           <div className="dayPlanButtons"><button className="addPlanBtn" onClick={()=>planRoutine(day)}>+ Plan</button><button className="restPlanBtn" onClick={()=>planRest(day)}>Rest</button></div>
           {plans.map((p:PlannedWorkout)=>{ 
-            if(p.type==='rest') return <div className="restEventV28" key={p.id}><em>Rest Day</em><strong>Recovery</strong><div className="planMoveBtns"><button onClick={()=>movePlan(p,-1)}>←</button><button onClick={()=>movePlan(p,1)}>→</button><button onClick={()=>removePlan(p.id)}>Remove</button></div></div>;
+            if(p.type==='rest') return <div className="restEventV28" key={p.id}><em>Rest Day</em><strong>Recovery</strong><div className="planMoveBtns mobileMoveBtns"><button onClick={()=>movePlan(p,-1)}>Move ←</button><button onClick={()=>movePlan(p,1)}>Move →</button><button onClick={()=>removePlan(p.id)}>Remove</button></div></div>;
             const r=routines.find((x:Routine)=>x.id===p.routineId); 
-            return <div className="plannedEventV15" style={{borderColor:r?.color||'#0f172a', color:r?.color||'#0f172a'}} key={p.id}><em>Planned</em><strong>{r?.name||'Routine'}</strong><div className="planMoveBtns"><button onClick={()=>movePlan(p,-1)}>←</button><button onClick={()=>movePlan(p,1)}>→</button><button onClick={()=>removePlan(p.id)}>Remove</button></div></div> 
+            return <div className="plannedEventV15" style={{borderColor:r?.color||'#0f172a', color:r?.color||'#0f172a'}} key={p.id}><em>Planned</em><strong>{r?.name||'Routine'}</strong><div className="planMoveBtns mobileMoveBtns">{p.routineId&&<button className="startPlannedBtn" onClick={()=>startRoutineWorkout(p.routineId!, day)}>Start</button>}<button onClick={()=>movePlan(p,-1)}>Move ←</button><button onClick={()=>movePlan(p,1)}>Move →</button><button onClick={()=>removePlan(p.id)}>Remove</button></div></div> 
           })}
           {ws.map((w:Workout)=>{ const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="completedEventV15" style={{background:r?.color||'#0f172a'}} key={w.id}><em>Completed</em><strong>{r?.name||w.title}</strong><span>{ss.length} sets · {fmtVol(vol)}</span></div> })}
         </Card>
