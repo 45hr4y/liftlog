@@ -404,3 +404,16 @@ Changed:
 - Added remove-photo button before saving.
 - Saving a variant now auto-selects/focuses the relevant exercise where possible.
 - Button copy simplified to "Save machine variant".
+
+
+## v47 First-Day UX Polish
+- Machine images are larger and expandable.
+- Added expandable machine photos inside workout exercise cards.
+- Removed redundant machine settings UI from the machine builder.
+- Machine tags remain as the simpler machine-setting memory system.
+- New machines are now added directly under the exercise card while training.
+- Top workout add panel now focuses on adding exercises only.
+- Exercise add flow now clears search and shows a smoother success confirmation.
+- Nutrition defaults are less assumptive: meal type defaults to Other and protein is not pre-checked.
+- Snacks no longer count as meals in summary counters.
+- Removed the Next Upgrade Preview card.

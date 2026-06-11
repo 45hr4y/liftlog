@@ -32,6 +32,24 @@ function safeText(x:any, fallback=''){ return typeof x==='string' && x.trim()?x:
 
 function safeArray<T>(x:T[]|undefined|null):T[]{ return Array.isArray(x)?x:[]; }
 
+
+async function compressImageFile(file?:File|Blob, maxSize=960, quality=0.72):Promise<Blob|undefined>{
+  if(!file || !('type' in file) || !(file as File).type?.startsWith?.('image/')) return file as Blob|undefined;
+  try{
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return file as Blob;
+    ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    return await new Promise<Blob|undefined>(resolve=>canvas.toBlob(b=>resolve(b || (file as Blob)),'image/webp',quality));
+  }catch{
+    return file as Blob;
+  }
+}
+
 function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
 
 
@@ -1256,20 +1274,15 @@ function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: Work
   return values;
 }
 
-function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record<string, number>; exercises?:Exercise[]; workouts?:Workout[]; sets?:WorkoutSet[]}) {
+const BodyHeatMap = React.memo(function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record<string, number>; exercises?:Exercise[]; workouts?:Workout[]; sets?:WorkoutSet[]}) {
   const [mode,setMode]=useState<'volume'|'recovery'>('volume');
-  const [selectedMuscle,setSelectedMuscle]=useState<string|undefined>();
-  const recovery = recoveryValuesFromVolume(values, exercises, workouts, sets);
+  const recovery = useMemo(()=>recoveryValuesFromVolume(values, exercises, workouts, sets),[values, exercises, workouts, sets]);
   const display = mode==='volume' ? values : recovery;
-  const max = mode==='volume' ? Math.max(...Object.values(values), 1) : 100;
+  const max = useMemo(()=>mode==='volume' ? Math.max(...Object.values(values), 1) : 100,[mode, values]);
   const cls = (key:string) => `hmPart ${mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}`;
-  const label = (key:string, name:string) => <button className="hmLabel" onClick={()=>setSelectedMuscle(key)}><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></button>;
-  const selectedRecovery = selectedMuscle ? recovery[selectedMuscle]||0 : 0;
-  const selectedVolume = selectedMuscle ? values[selectedMuscle]||0 : 0;
-  const selectedExercises = selectedMuscle ? exercises.filter((e:Exercise)=>muscleKeyFromName(e.muscle)===selectedMuscle || (e.secondaryMuscles||[]).some(m=>muscleKeyFromName(m)===selectedMuscle)).slice(0,6) : [];
-  const selectedLast = selectedMuscle ? recoveryForMuscleFromHistory(selectedMuscle,exercises,workouts,sets) : undefined;
+  const label = (key:string, name:string) => <div className="hmLabel"><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></div>;
 
-  return <div className="proHeatMap"><p className="muted bodyMapIntro">Side delts are shown on the outside shoulder cap; front delts sit on the front/anterior shoulder region.</p><div className="heatToggle"><button className={mode==='volume'?'active':''} onClick={()=>setMode('volume')}>Volume</button><button className={mode==='recovery'?'active':''} onClick={()=>setMode('recovery')}>Recovery</button></div>
+  return <div className="proHeatMap"><div className="heatToggle"><button className={mode==='volume'?'active':''} onClick={()=>setMode('volume')}>Volume</button><button className={mode==='recovery'?'active':''} onClick={()=>setMode('recovery')}>Recovery</button></div>
     <div className="hmBodies">
       <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Front body muscle heat map">
         <text x="140" y="24" textAnchor="middle" className="hmTitle">FRONT</text>
@@ -1279,28 +1292,28 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
         <path d="M190 150 C210 170,225 210,232 260" className="hmLimb"/>
         <path d="M102 390 C95 435,93 470,90 505" className="hmLimb"/>
         <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
-        <path onClick={()=>setSelectedMuscle('Chest')} className={cls('Chest')} d="M100 150 C112 138,132 141,136 154 L136 204 C119 204,105 194,98 176 Z"/>
-        <path onClick={()=>setSelectedMuscle('Chest')} className={cls('Chest')} d="M180 150 C168 138,148 141,144 154 L144 204 C161 204,175 194,182 176 Z"/>
-        <path onClick={()=>setSelectedMuscle('FrontDelt')} className={cls('FrontDelt')} d="M92 142 C106 132,122 134,132 148 C118 154,105 160,96 174 C88 164,86 151,92 142 Z"/>
-        <path onClick={()=>setSelectedMuscle('FrontDelt')} className={cls('FrontDelt')} d="M188 142 C174 132,158 134,148 148 C162 154,175 160,184 174 C192 164,194 151,188 142 Z"/>
-        <path onClick={()=>setSelectedMuscle('SideDelt')} className={cls('SideDelt')} d="M72 150 C55 158,49 176,52 198 C70 197,84 184,95 160 C88 153,80 150,72 150 Z"/>
-        <path onClick={()=>setSelectedMuscle('SideDelt')} className={cls('SideDelt')} d="M208 150 C225 158,231 176,228 198 C210 197,196 184,185 160 C192 153,200 150,208 150 Z"/>
-        <path onClick={()=>setSelectedMuscle('Biceps')} className={cls('Biceps')} d="M48 208 C47 238,55 270,68 292 C79 268,78 230,70 203 C60 202,53 204,48 208 Z"/>
-        <path onClick={()=>setSelectedMuscle('Biceps')} className={cls('Biceps')} d="M232 208 C233 238,225 270,212 292 C201 268,202 230,210 203 C220 202,227 204,232 208 Z"/>
-        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
-        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
-        <path onClick={()=>setSelectedMuscle('Abs')} className={cls('Abs')} d="M113 210 C122 203,134 203,138 214 L138 316 C122 314,111 296,108 262 Z"/>
-        <path onClick={()=>setSelectedMuscle('Abs')} className={cls('Abs')} d="M167 210 C158 203,146 203,142 214 L142 316 C158 314,169 296,172 262 Z"/>
-        <path onClick={()=>setSelectedMuscle('Obliques')} className={cls('Obliques')} d="M100 210 C92 242,91 282,109 316 C113 275,113 240,110 213 Z"/>
-        <path onClick={()=>setSelectedMuscle('Obliques')} className={cls('Obliques')} d="M180 210 C188 242,189 282,171 316 C167 275,167 240,170 213 Z"/>
-        <path onClick={()=>setSelectedMuscle('Abductors')} className={cls('Abductors')} d="M94 318 C82 347,85 382,105 402 C116 376,120 347,116 321 Z"/>
-        <path onClick={()=>setSelectedMuscle('Abductors')} className={cls('Abductors')} d="M186 318 C198 347,195 382,175 402 C164 376,160 347,164 321 Z"/>
-        <path onClick={()=>setSelectedMuscle('Adductors')} className={cls('Adductors')} d="M119 320 C116 352,121 382,135 405 C142 374,142 344,137 321 Z"/>
-        <path onClick={()=>setSelectedMuscle('Adductors')} className={cls('Adductors')} d="M161 320 C164 352,159 382,145 405 C138 374,138 344,143 321 Z"/>
-        <path onClick={()=>setSelectedMuscle('Quads')} className={cls('Quads')} d="M95 402 C97 443,108 473,124 489 C140 455,136 424,126 402 Z"/>
-        <path onClick={()=>setSelectedMuscle('Quads')} className={cls('Quads')} d="M185 402 C183 443,172 473,156 489 C140 455,144 424,154 402 Z"/>
-        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
-        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
+        <path className={cls('Chest')} d="M100 150 C112 138,132 141,136 154 L136 204 C119 204,105 194,98 176 Z"/>
+        <path className={cls('Chest')} d="M180 150 C168 138,148 141,144 154 L144 204 C161 204,175 194,182 176 Z"/>
+        <path className={cls('FrontDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
+        <path className={cls('FrontDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
+        <path className={cls('SideDelt')} d="M55 197 C44 219,39 242,42 264 C59 260,70 231,72 203 Z"/>
+        <path className={cls('SideDelt')} d="M225 197 C236 219,241 242,238 264 C221 260,210 231,208 203 Z"/>
+        <path className={cls('Biceps')} d="M42 264 C42 292,51 319,65 335 C78 312,77 281,70 258 Z"/>
+        <path className={cls('Biceps')} d="M238 264 C238 292,229 319,215 335 C202 312,203 281,210 258 Z"/>
+        <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
+        <path className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
+        <path className={cls('Abs')} d="M113 210 C122 203,134 203,138 214 L138 316 C122 314,111 296,108 262 Z"/>
+        <path className={cls('Abs')} d="M167 210 C158 203,146 203,142 214 L142 316 C158 314,169 296,172 262 Z"/>
+        <path className={cls('Obliques')} d="M100 210 C92 242,91 282,109 316 C113 275,113 240,110 213 Z"/>
+        <path className={cls('Obliques')} d="M180 210 C188 242,189 282,171 316 C167 275,167 240,170 213 Z"/>
+        <path className={cls('Abductors')} d="M94 318 C82 347,85 382,105 402 C116 376,120 347,116 321 Z"/>
+        <path className={cls('Abductors')} d="M186 318 C198 347,195 382,175 402 C164 376,160 347,164 321 Z"/>
+        <path className={cls('Adductors')} d="M119 320 C116 352,121 382,135 405 C142 374,142 344,137 321 Z"/>
+        <path className={cls('Adductors')} d="M161 320 C164 352,159 382,145 405 C138 374,138 344,143 321 Z"/>
+        <path className={cls('Quads')} d="M95 402 C97 443,108 473,124 489 C140 455,136 424,126 402 Z"/>
+        <path className={cls('Quads')} d="M185 402 C183 443,172 473,156 489 C140 455,144 424,154 402 Z"/>
+        <path className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
+        <path className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
       </svg>
 
       <svg className="hmSvg" viewBox="0 0 280 520" role="img" aria-label="Back body muscle heat map">
@@ -1311,34 +1324,29 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
         <path d="M190 150 C210 170,225 210,232 260" className="hmLimb"/>
         <path d="M102 390 C95 435,93 470,90 505" className="hmLimb"/>
         <path d="M178 390 C185 435,187 470,190 505" className="hmLimb"/>
-        <path onClick={()=>setSelectedMuscle('Traps')} className={cls('Traps')} d="M106 136 C118 111,132 110,138 140 L138 238 C119 213,105 177,96 148 Z"/>
-        <path onClick={()=>setSelectedMuscle('Traps')} className={cls('Traps')} d="M174 136 C162 111,148 110,142 140 L142 238 C161 213,175 177,184 148 Z"/>
-        <path onClick={()=>setSelectedMuscle('UpperBack')} className={cls('UpperBack')} d="M98 150 C118 157,130 176,138 224 C117 218,101 195,92 166 Z"/>
-        <path onClick={()=>setSelectedMuscle('UpperBack')} className={cls('UpperBack')} d="M182 150 C162 157,150 176,142 224 C163 218,179 195,188 166 Z"/>
-        <path onClick={()=>setSelectedMuscle('RearDelt')} className={cls('RearDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
-        <path onClick={()=>setSelectedMuscle('RearDelt')} className={cls('RearDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
-        <path onClick={()=>setSelectedMuscle('Triceps')} className={cls('Triceps')} d="M55 198 C42 230,43 287,66 334 C79 300,75 244,70 205 Z"/>
-        <path onClick={()=>setSelectedMuscle('Triceps')} className={cls('Triceps')} d="M225 198 C238 230,237 287,214 334 C201 300,205 244,210 205 Z"/>
-        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
-        <path onClick={()=>setSelectedMuscle('Forearms')} className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
-        <path onClick={()=>setSelectedMuscle('Lats')} className={cls('Lats')} d="M96 198 C109 226,113 260,108 303 C92 283,83 239,88 202 Z"/>
-        <path onClick={()=>setSelectedMuscle('Lats')} className={cls('Lats')} d="M184 198 C171 226,167 260,172 303 C188 283,197 239,192 202 Z"/>
-        <path onClick={()=>setSelectedMuscle('Erectors')} className={cls('Erectors')} d="M124 222 C134 225,138 245,138 318 C126 309,121 278,120 237 Z"/>
-        <path onClick={()=>setSelectedMuscle('Erectors')} className={cls('Erectors')} d="M156 222 C146 225,142 245,142 318 C154 309,159 278,160 237 Z"/>
-        <path onClick={()=>setSelectedMuscle('Glutes')} className={cls('Glutes')} d="M96 318 C116 309,134 319,139 341 C135 374,116 388,96 373 Z"/>
-        <path onClick={()=>setSelectedMuscle('Glutes')} className={cls('Glutes')} d="M184 318 C164 309,146 319,141 341 C145 374,164 388,184 373 Z"/>
-        <path onClick={()=>setSelectedMuscle('Hamstrings')} className={cls('Hamstrings')} d="M96 392 C96 436,107 472,126 489 C139 448,134 415,123 391 Z"/>
-        <path onClick={()=>setSelectedMuscle('Hamstrings')} className={cls('Hamstrings')} d="M184 392 C184 436,173 472,154 489 C141 448,146 415,157 391 Z"/>
-        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
-        <path onClick={()=>setSelectedMuscle('Calves')} className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
+        <path className={cls('Traps')} d="M106 136 C118 111,132 110,138 140 L138 238 C119 213,105 177,96 148 Z"/>
+        <path className={cls('Traps')} d="M174 136 C162 111,148 110,142 140 L142 238 C161 213,175 177,184 148 Z"/>
+        <path className={cls('UpperBack')} d="M98 150 C118 157,130 176,138 224 C117 218,101 195,92 166 Z"/>
+        <path className={cls('UpperBack')} d="M182 150 C162 157,150 176,142 224 C163 218,179 195,188 166 Z"/>
+        <path className={cls('RearDelt')} d="M82 151 C61 160,54 178,54 198 C74 196,88 181,98 159 Z"/>
+        <path className={cls('RearDelt')} d="M198 151 C219 160,226 178,226 198 C206 196,192 181,182 159 Z"/>
+        <path className={cls('Triceps')} d="M55 198 C42 230,43 287,66 334 C79 300,75 244,70 205 Z"/>
+        <path className={cls('Triceps')} d="M225 198 C238 230,237 287,214 334 C201 300,205 244,210 205 Z"/>
+        <path className={cls('Forearms')} d="M64 335 C57 360,55 379,65 396 C81 382,88 361,80 337 Z"/>
+        <path className={cls('Forearms')} d="M216 335 C223 360,225 379,215 396 C199 382,192 361,200 337 Z"/>
+        <path className={cls('Lats')} d="M96 198 C109 226,113 260,108 303 C92 283,83 239,88 202 Z"/>
+        <path className={cls('Lats')} d="M184 198 C171 226,167 260,172 303 C188 283,197 239,192 202 Z"/>
+        <path className={cls('Erectors')} d="M124 222 C134 225,138 245,138 318 C126 309,121 278,120 237 Z"/>
+        <path className={cls('Erectors')} d="M156 222 C146 225,142 245,142 318 C154 309,159 278,160 237 Z"/>
+        <path className={cls('Glutes')} d="M96 318 C116 309,134 319,139 341 C135 374,116 388,96 373 Z"/>
+        <path className={cls('Glutes')} d="M184 318 C164 309,146 319,141 341 C145 374,164 388,184 373 Z"/>
+        <path className={cls('Hamstrings')} d="M96 392 C96 436,107 472,126 489 C139 448,134 415,123 391 Z"/>
+        <path className={cls('Hamstrings')} d="M184 392 C184 436,173 472,154 489 C141 448,146 415,157 391 Z"/>
+        <path className={cls('Calves')} d="M99 490 C99 512,107 520,121 512 C128 495,129 474,122 454 C108 462,101 475,99 490 Z"/>
+        <path className={cls('Calves')} d="M181 490 C181 512,173 520,159 512 C152 495,151 474,158 454 C172 462,179 475,181 490 Z"/>
       </svg>
     </div>
 
-    {selectedMuscle&&<div className="muscleDetailCard">
-      <div className="row"><h3>{selectedMuscle.replace('FrontDelt','Front delts').replace('SideDelt','Side delts').replace('RearDelt','Rear delts').replace('UpperBack','Upper back')}</h3><button className="secondary mini" onClick={()=>setSelectedMuscle(undefined)}>Close</button></div>
-      <div className="muscleDetailStats"><span>Recovery <strong>{Math.round(selectedRecovery)}%</strong></span><span>Volume <strong>{fmtVol(selectedVolume)}</strong></span><span>Last trained <strong>{selectedLast?.last || '—'}</strong></span><span>Recent sets <strong>{selectedLast?.sets || 0}</strong></span></div>
-      {selectedExercises.length?<Pills>{selectedExercises.map((e:Exercise)=><span key={e.id}>{e.name}</span>)}</Pills>:<p className="muted">No saved exercises for this muscle yet.</p>}
-    </div>}
     <div className="hmLegendGrid">
       {label('Chest','Chest')}
       {label('Traps','Traps')}
@@ -1361,8 +1369,7 @@ function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record
       {label('Forearms','Forearms')}
     </div>
   </div>
-}
-
+});
 
 
 function ExerciseSearchSelect({exercises,value,onChange,placeholder='Search exercises...'}:{exercises:Exercise[];value?:number;onChange:(id:number|undefined)=>void;placeholder?:string}) {
@@ -1479,35 +1486,21 @@ function EmptyState({title,body,action}:{title:string;body:string;action?:any}) 
   return <Card cls="emptyStateCard"><h3>{title}</h3><p className="muted">{body}</p>{action}</Card>
 }
 
-
-function FeatureHelp({title,children}:{title:string;children:React.ReactNode}) {
-  return <details className="featureHelp"><summary>ⓘ {title}</summary><div>{children}</div></details>
-}
-
 function HomePage({data}:any){
   const {exercises,subtypes,routines,routineExercises,workouts,sets,setPage}=data;
-  const weekWorkouts = workoutsThisWeek(workouts);
-  const weekSets = sets.filter((s:WorkoutSet)=>weekWorkouts.some((w:Workout)=>w.id===s.workoutId));
-  const vol = weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
+  const weekWorkouts = useMemo(()=>workoutsThisWeek(workouts),[workouts]);
+  const weekWorkoutIds = useMemo(()=>new Set(weekWorkouts.map((w:Workout)=>w.id)),[weekWorkouts]);
+  const weekSets = useMemo(()=>sets.filter((s:WorkoutSet)=>weekWorkoutIds.has(s.workoutId)),[sets,weekWorkoutIds]);
+  const vol = useMemo(()=>weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0),[weekSets]);
   const lastWorkout = workouts[0];
-  const suggestedRoutine = routines.find((r:Routine)=>!r.archived) || routines[0];
-  const groups = groupVolumesForWeek(exercises, workouts, sets);
-  const maxGroup = Math.max(...Object.values(groups), 1);
-  const prs = recentPRItems(exercises, sets);
-  const recommended = recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets);
-  const recoveryMuscles = ['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'];
-  const [homePanel,setHomePanel]=useState<'overview'|'recovery'|'map'|'prs'>('overview');
-  const lastRoutine = lastWorkout?.routineId ? routines.find((r:Routine)=>r.id===lastWorkout.routineId) : suggestedRoutine;
-  const nutritionLogsHome = loadNutritionLogs();
-  const weekNutrition = Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=d.toISOString().slice(0,10); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});
-  const waterGoalDaysHome = weekNutrition.filter(n=>n.waterMl>=2000).length;
-  const proteinGoalDaysHome = weekNutrition.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length;
-  const recoveryScoresHome = recoveryMuscles.map(m=>({m,rec:recoveryForMuscleFromHistory(m,exercises,workouts,sets)}));
-  const mostRecovered = recoveryScoresHome.sort((a,b)=>b.rec.score-a.rec.score)[0];
-  const leastRecovered = [...recoveryScoresHome].sort((a,b)=>a.rec.score-b.rec.score)[0];
+  const suggestedRoutine = useMemo(()=>routines.find((r:Routine)=>!r.archived) || routines[0],[routines]);
+  const groups = useMemo(()=>groupVolumesForWeek(exercises, workouts, sets),[exercises,workouts,sets]);
+  const maxGroup = useMemo(()=>Math.max(...Object.values(groups), 1),[groups]);
+  const prs = useMemo(()=>recentPRItems(exercises, sets),[exercises,sets]);
+  const recommended = useMemo(()=>recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets),[exercises,routines,routineExercises,workouts,sets]);
+  const recoveryMuscles = useMemo(()=>['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'],[]);
 
   return <section className="homeV12">
-    <FeatureHelp title="About LiftLog"><p>Start workouts, track machines, monitor recovery, and review progress without needing to understand every feature first.</p></FeatureHelp>
     <Card cls="hero heroV12">
       <div className="heroTop">
         <div>
@@ -1520,32 +1513,6 @@ function HomePage({data}:any){
       <button className="primary glowBtn" onClick={()=>setPage('log')}>Start Workout</button>
     </Card>
 
-    <div className="homeWeeklyCards">
-      <Card cls="continueRoutineCard">
-        <span className="eyebrow">CONTINUE LAST ROUTINE</span>
-        <h3>{lastRoutine?.name || 'Start training'}</h3>
-        <p className="muted">{lastWorkout ? `Last completed ${lastWorkout.date}` : 'Create or choose a routine to begin.'}</p>
-        <button className="primary" onClick={()=>setPage('log')}>Start</button>
-      </Card>
-      <Card cls="recoveryInsightCard">
-        <span className="eyebrow">RECOVERY INSIGHTS</span>
-        <div className="recoveryInsightRows">
-          <span>🟢 Most recovered <strong>{mostRecovered?.m || '—'}</strong></span>
-          <span>🔴 Needs recovery <strong>{leastRecovered?.m || '—'}</strong></span>
-          <span>Suggested <strong>{recommended?.routine?.name || 'Listen to your body'}</strong></span>
-        </div>
-      </Card>
-      <Card cls="homeWeekSummaryCard">
-        <span className="eyebrow">THIS WEEK</span>
-        <div className="homeWeekMiniStats">
-          <b>🏋️ {weekWorkouts.length}</b><span>Workouts</span>
-          <b>🏆 {prs.length}</b><span>PRs</span>
-          <b>💧 {waterGoalDaysHome}/7</b><span>Water</span>
-          <b>🥩 {proteinGoalDaysHome}/7</b><span>Protein</span>
-        </div>
-      </Card>
-    </div>
-
     {!workouts.length && <EmptyState title="No workouts yet" body="Start a workout from scratch, or create a routine and LiftLog will begin tracking your history, recovery, stats and nutrition." action={<button className="primary" onClick={()=>setPage('log')}>Start first workout</button>} />}
 
     <div className="quickActions quickActionsV12">
@@ -1554,48 +1521,39 @@ function HomePage({data}:any){
       <button onClick={()=>setPage('routines')}>Routines</button>
     </div>
 
-    <div className="homePanelTabs">
-      <button className={homePanel==='overview'?'active':''} onClick={()=>setHomePanel('overview')}>Overview</button>
-      <button className={homePanel==='recovery'?'active':''} onClick={()=>setHomePanel('recovery')}>Recovery</button>
-      <button className={homePanel==='map'?'active':''} onClick={()=>setHomePanel('map')}>Body Map</button>
-      <button className={homePanel==='prs'?'active':''} onClick={()=>setHomePanel('prs')}>PRs</button>
+    <div className="dashboardGrid">
+      <Card cls="glassMetric">
+        <span>Weekly Volume</span>
+        <strong>{fmtVol(vol)}</strong>
+        <em>{weekSets.length} sets this week</em>
+      </Card>
+      <Card cls="glassMetric">
+        <span>Workouts</span>
+        <strong>{weekWorkouts.length}</strong>
+        <em>this week</em>
+      </Card>
+      <Card cls="glassMetric">
+        <span>Library</span>
+        <strong>{exercises.length}</strong>
+        <em>{subtypes.length} machine subtypes</em>
+      </Card>
+      <Card cls="glassMetric">
+        <span>Routines</span>
+        <strong>{routines.length}</strong>
+        <em>templates saved</em>
+      </Card>
     </div>
 
-    {homePanel==='overview' && <div className="homePanel">
-      <div className="dashboardGrid">
-        <Card cls="glassMetric">
-          <span>Weekly Volume</span>
-          <strong>{fmtVol(vol)}</strong>
-          <em>{weekSets.length} sets this week</em>
-        </Card>
-        <Card cls="glassMetric">
-          <span>Workouts</span>
-          <strong>{weekWorkouts.length}</strong>
-          <em>this week</em>
-        </Card>
-        <Card cls="glassMetric">
-          <span>Library</span>
-          <strong>{exercises.length}</strong>
-          <em>{subtypes.length} machine subtypes</em>
-        </Card>
-        <Card cls="glassMetric">
-          <span>Routines</span>
-          <strong>{routines.length}</strong>
-          <em>templates saved</em>
-        </Card>
-      </div>
-      {recommended&&<Card cls="recommendedTrain">
-        <span>Recommended today</span>
-        <strong>{recommended.routine.name}</strong>
-        <em>{recommended.score}% average readiness</em>
-      </Card>}
-    </div>}
-
-    {homePanel==='recovery' && <Card cls="premiumCard recoveryV30 homePanel">
+    <Card cls="premiumCard recoveryV30">
       <div className="sectionHeader">
         <div><h3>Recovery Status</h3><p className="muted">Based on when each muscle was last trained and recent volume.</p></div>
         <button className="textBtn" onClick={()=>setPage('stats')}>Details</button>
       </div>
+      {recommended&&<div className="recommendedTrain">
+        <span>Recommended today</span>
+        <strong>{recommended.routine.name}</strong>
+        <em>{recommended.score}% average readiness</em>
+      </div>}
       <div className="recoveryStatusGrid">
         {recoveryMuscles.map(m=>{
           const rec = recoveryForMuscleFromHistory(m,exercises,workouts,sets);
@@ -1613,41 +1571,21 @@ function HomePage({data}:any){
         <span><i className="recDot recYellow"></i>51–75% Almost ready</span>
         <span><i className="recDot recGreen"></i>76–100% Ready</span>
       </div>
-    </Card>}
+    </Card>
 
-    {homePanel==='map' && <Card cls="premiumCard homePanel">
+    <Card cls="premiumCard">
       <div className="sectionHeader">
         <h3>Weekly Body Heat Map</h3>
-        <span className="muted miniLabel">Volume / recovery</span>
+        <span className="muted miniLabel">Volume intensity</span>
       </div>
       <BodyHeatMap values={muscleHeatValues(exercises, workouts, sets)} exercises={exercises} workouts={workouts} sets={sets} />
-    </Card>}
+      
+    </Card>
 
-    {homePanel==='prs' && <Card cls="premiumCard homePanel">
+    <Card cls="premiumCard">
       <div className="sectionHeader">
-        <h3>Favourite Progression</h3>
-        <button className="textBtn" onClick={()=>setPage('stats')}>Progress</button>
-      </div>
-      <div className="favProgressGrid">
-        {exercises.filter((e:Exercise)=>e.favourite).slice(0,6).map((ex:Exercise)=>{
-          const exSets = sets.filter((s:WorkoutSet)=>s.exerciseId===ex.id).sort((a:WorkoutSet,b:WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
-          const first = exSets[0];
-          const last = exSets[exSets.length-1];
-          const best = exSets.length ? Math.max(...exSets.map((s:WorkoutSet)=>e1rm(kgValue(s),s.reps))) : 0;
-          const delta = first && last ? Math.round((e1rm(kgValue(last),last.reps)-e1rm(kgValue(first),first.reps))*10)/10 : 0;
-          const points = exSets.slice(-8).map((s:WorkoutSet)=>e1rm(kgValue(s),s.reps));
-          const maxP = Math.max(...points,1), minP = Math.min(...points,0), range=Math.max(1,maxP-minP);
-          return <div className="favProgressCard" key={ex.id}>
-            <div><strong>{ex.name}</strong><span>{ex.muscle}</span></div>
-            <b>{best?`${best}kg e1RM`:'No sets yet'}</b>
-            <em>{delta>0?`+${delta}kg`:delta<0?`${delta}kg`:'No change yet'}</em>
-            <svg viewBox="0 0 120 34">{points.length>1&&<polyline points={points.map((p:number,i:number)=>`${8+i*(104/(points.length-1))},${28-((p-minP)/range)*22}`).join(' ')} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>}</svg>
-          </div>
-        })}
-      </div>
-      {!exercises.some((e:Exercise)=>e.favourite)&&<p className="muted">Star exercises in the Exercise Library and their progression will appear here.</p>}
-      <div className="sectionHeader prSectionHeader">
         <h3>Recent PR Signals</h3>
+        <button className="textBtn" onClick={()=>setPage('stats')}>Progress</button>
       </div>
       {prs.length ? prs.map((item:any)=><div className="prFeedItem" key={item.set.id}>
         <div className="prIcon">🏆</div>
@@ -1656,13 +1594,6 @@ function HomePage({data}:any){
           <span>{item.set.weight}{item.set.unit} × {item.set.reps} · e1RM {e1rm(kgValue(item.set), item.set.reps)}kg</span>
         </div>
       </div>) : <p className="muted">No sets logged yet. PRs will appear here after workouts.</p>}
-    </Card>}
-
-    <Card cls="premiumCard">
-      <div className="sectionHeader">
-        <h3>Next Upgrade Preview</h3>
-      </div>
-      <p className="muted">Coming next: body heat map, exercise GIFs/YouTube demos, and richer exercise cards.</p>
     </Card>
   </section>
 }
@@ -1729,11 +1660,7 @@ function ExercisesPage({data}:any){
     return matchesSearch && matchesMuscle && matchesEquip;
   });
 
-    const [renameExerciseId,setRenameExerciseId]=useState<number|undefined>(); const [renameExerciseName,setRenameExerciseName]=useState('');
-  function startRenameExercise(ex:Exercise){ if(!ex.id)return; setRenameExerciseId(ex.id); setRenameExerciseName(ex.name); }
-  async function saveRenameExercise(){ if(!renameExerciseId || !renameExerciseName.trim()) return; await db.exercises.update(renameExerciseId,{name:renameExerciseName.trim()}); setRenameExerciseId(undefined); setRenameExerciseName(''); refresh(); }
-
-return <section>
+  return <section>
     <Card cls="builderHero">
       <div><span className="eyebrow">Exercise Builder</span><h2>Create exercises faster</h2><p className="muted">Add primary muscles, secondary muscles, machines and optionally drop the exercise straight into a routine.</p></div>
     </Card>
@@ -1818,21 +1745,12 @@ function SubtypesPage({data}:any){
   const {exercises,subtypes,refresh}=data;
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>(); const [tagInput,setTagInput]=useState(''); const [tags,setTags]=useState<string[]>([]);
   const [settings,setSettings]=useState<MachineSetting[]>([]); const [label,setLabel]=useState(''); const [type,setType]=useState<SettingType>('dropdown'); const [opts,setOpts]=useState('1,2,3,4,5');
-  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine'); const [savedMsg,setSavedMsg]=useState('');
+  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
 
   function addSetting(){ if(!label.trim())return; setSettings([...settings,{id:crypto.randomUUID(),label:label.trim(),type,options:type==='dropdown'?opts.split(',').map(x=>x.trim()):undefined,defaultValue:type==='checkbox'?false:''}]); setLabel(''); }
   function addTag(){ const t=tagInput.trim(); if(!t)return; setTags([...tags,t]); setTagInput(''); }
   async function createExerciseHere(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
-  async function add(){ 
-    if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); 
-    const savedName = name.trim();
-    await db.subtypes.add({exerciseId,name:savedName,defaultUnit:unit,photo,settings,tags,createdAt:now()}); 
-    setName(''); setPhoto(undefined); setSettings([]); setTags([]); setUnit('kg'); 
-    setSavedMsg(`Saved ${savedName}`);
-    haptic(12);
-    setTimeout(()=>setSavedMsg(''),1800);
-    refresh(); 
-  }
+  async function add(){ if(!exerciseId||!name.trim()) return alert('Choose exercise and name'); await db.subtypes.add({exerciseId,name:name.trim(),defaultUnit:unit,photo,settings:[],tags,createdAt:now()}); setName(''); setPhoto(undefined); setTags([]); setTagInput(''); setUnit('kg'); refresh(); }
   async function del(s:Subtype){ if(!confirm('Delete this subtype? Past set logs remain.'))return; await db.subtypes.delete(s.id!); const rs=await db.routineExercises.where('subtypeId').equals(s.id!).toArray(); for(const r of rs) await db.routineExercises.update(r.id!,{subtypeId:undefined}); refresh(); }
   return <section>
     <Card cls="builderHero"><span className="eyebrow">Machine Builder</span><h2>Machines belong to exercises</h2><p className="muted">Search for an exercise, or create one here first, then save the exact machine/subtype with its own unit and settings.</p></Card>
@@ -1846,14 +1764,10 @@ function SubtypesPage({data}:any){
       </details>
       <input placeholder="e.g. Prime Lateral Raise" value={name} onChange={e=>setName(e.target.value)}/>
       <label>Default unit for this exact machine</label><select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-      <div className="singlePhotoPicker">
-        <label className="upload"><ImagePlus/> {photo ? 'Change Machine Photo' : 'Add Machine Photo'}<input hidden type="file" accept="image/*" onChange={e=>setPhoto(e.target.files?.[0])}/></label>
-        {photo&&<button className="secondary mini" onClick={()=>setPhoto(undefined)}>Remove photo</button>}
-      </div>{photo&&<img className="preview" src={blobUrl(photo)}/>}
-      <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><h4>Machine settings</h4><div className="builderGrid"><input placeholder="Setting label e.g. Seat Position" value={label} onChange={e=>setLabel(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value as SettingType)}><option value="dropdown">Dropdown</option><option value="checkbox">Checkbox</option><option value="text">Text</option></select>{type==='dropdown'&&<input value={opts} onChange={e=>setOpts(e.target.value)} placeholder="1,2,3,4,5"/>}</div>
-      <button className="secondary" onClick={addSetting}>Add Setting</button><Pills>{settings.map(s=><span key={s.id}>{s.label} · {s.type}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
+      <label className="upload"><ImagePlus/> Add one machine photo<input hidden type="file" accept="image/*" capture="environment" onChange={async e=>setPhoto(await compressImageFile(e.target.files?.[0]))}/></label>{photo&&<img className="preview" src={blobUrl(photo)}/>}
+      <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
     </Card>
-    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}{s.settings.map(x=><span key={x.id}>{x.label}</span>)}</Pills></div></Card>})}
+    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine"><div>{s.photo?<details className="machinePhotoExpand"><summary><img src={blobUrl(s.photo)}/><em>Tap to expand</em></summary><img src={blobUrl(s.photo)} className="machinePhotoLarge"/></details>:<div className="placeholder">No photo</div>}</div><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}</Pills></div></Card>})}
   </section>
 }
 
@@ -1862,53 +1776,22 @@ function RoutinesPage({data}:any){
   const [routineName,setRoutineName]=useState(''); const [colour,setColour]=useState('#7c3aed'); const [routineId,setRoutineId]=useState<number|undefined>(routines[0]?.id);
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [subtypeId,setSubtypeId]=useState<number|undefined>(); const [setsN,setSetsN]=useState(4); const [reps,setReps]=useState('8-12'); const [rest,setRest]=useState(90);
   const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine');
-  const [newMachineName,setNewMachineName]=useState(''); const [newMachineUnit,setNewMachineUnit]=useState<Unit>('kg'); const [newMachinePhoto,setNewMachinePhoto]=useState<Blob|undefined>();
-  const [renameRoutineId,setRenameRoutineId]=useState<number|undefined>(); const [renameRoutineName,setRenameRoutineName]=useState('');
-  const [showCardio,setShowCardio]=useState(()=>localStorage.getItem('liftlog-cardio-enabled')==='yes'); const [cardioName,setCardioName]=useState('Treadmill'); const [cardioMinutes,setCardioMinutes]=useState('10');
-
-  useEffect(()=>{localStorage.setItem('liftlog-cardio-enabled',showCardio?'yes':'no')},[showCardio]);
-  function startRenameRoutine(){ const r=routines.find((x:Routine)=>x.id===routineId); if(!r?.id)return; setRenameRoutineId(r.id); setRenameRoutineName(r.name); }
-  async function saveRenameRoutine(){ if(!renameRoutineId || !renameRoutineName.trim()) return; await db.routines.update(renameRoutineId,{name:renameRoutineName.trim()}); setRenameRoutineId(undefined); setRenameRoutineName(''); refresh(); }
-  function addCardioToRoutine(){ if(!routineId) return alert('Choose routine first'); alert(`Cardio added as optional note: ${cardioName} · ${cardioMinutes || '10'} min`); }
+  const [newMachineName,setNewMachineName]=useState(''); const [newMachineUnit,setNewMachineUnit]=useState<Unit>('kg');
 
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
   async function createExerciseAndSelect(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
-  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,photo:newMachinePhoto,settings:[],tags:[],createdAt:now()}); setSubtypeId(id); setNewMachineName(''); setNewMachinePhoto(undefined); refresh(); }
-  async function moveRoutineItem(item:RoutineExercise, direction:-1|1){
-    if(!routineId || !item.id) return;
-    const sorted = routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
-    const idx = sorted.findIndex((x:RoutineExercise)=>x.id===item.id);
-    const swap = sorted[idx+direction];
-    if(!swap?.id) return;
-    await db.transaction('rw', db.routineExercises, async()=>{
-      await db.routineExercises.update(item.id!,{order:swap.order});
-      await db.routineExercises.update(swap.id!,{order:item.order});
-    });
-    refresh();
-  }
-  async function renumberRoutine(){
-    if(!routineId) return;
-    const sorted = routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
-    await db.transaction('rw', db.routineExercises, async()=>{
-      for(let i=0;i<sorted.length;i++) if(sorted[i].id) await db.routineExercises.update(sorted[i].id!,{order:i+1});
-    });
-    refresh();
-  }
+  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,settings:[],createdAt:now()}); setSubtypeId(id); setNewMachineName(''); refresh(); }
   async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
   const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
   return <section>
-    <FeatureHelp title="About Routine Builder"><p>Create routines, add exercises, save machine variants and reorder the plan. Use “Fix numbering” if you change the order a lot.</p></FeatureHelp>
-    {renameRoutineId&&<Card cls="editPanelV31"><h3>Rename routine</h3><input value={renameRoutineName} onChange={e=>setRenameRoutineName(e.target.value)} placeholder="Routine name"/><div className="grid2"><button className="primary" onClick={saveRenameRoutine}>Save name</button><button className="secondary" onClick={()=>setRenameRoutineId(undefined)}>Cancel</button></div></Card>}
-    <Card cls="cardioToggleCard"><div className="row"><div><h3>Optional Cardio</h3><p className="muted">Toggle this on if you want cardio prompts while building routines.</p></div><label className="switchLine"><input type="checkbox" checked={showCardio} onChange={e=>setShowCardio(e.target.checked)}/><span>{showCardio?'On':'Off'}</span></label></div>{showCardio&&<div className="grid3 cardioInputs"><input value={cardioName} onChange={e=>setCardioName(e.target.value)} placeholder="Cardio type"/><input value={cardioMinutes} onChange={e=>setCardioMinutes(e.target.value)} inputMode="numeric" placeholder="Minutes"/><button className="secondary" onClick={addCardioToRoutine}>Add cardio note</button></div>}</Card>
     <Card cls="builderHero"><span className="eyebrow">Routine Builder</span><h2>Build while you create</h2><p className="muted">Create a routine, create exercises, add machines and add them to the workout template from one place.</p></Card>
     <div className="builderSplit">
-      <Card cls="builderCard"><h3>1. Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3"><button className="secondary mini" onClick={async()=>{ const r = routines.find((x:Routine)=>x.id===routineId); if(!r || !routineId) return; const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()}); const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order); for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()}); setRoutineId(newId); refresh(); }}>Duplicate</button><button className="secondary mini" onClick={startRenameRoutine}>Rename</button><button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button><button className="danger mini" onClick={delRoutine}>Delete</button></div></>}</Card>
+      <Card cls="builderCard"><h3>1. Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{r.name}</option>)}</select>{routineId&&<><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3"><button className="secondary mini" onClick={async()=>{ const r = routines.find((x:Routine)=>x.id===routineId); if(!r || !routineId) return; const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, createdAt:now()}); const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order); for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()}); setRoutineId(newId); refresh(); }}>Duplicate</button><button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button><button className="danger mini" onClick={delRoutine}>Delete</button></div></>}</Card>
       <Card cls="builderCard"><h3>2. Exercise</h3><ExerciseSearchSelect exercises={exercises} value={exerciseId} onChange={(id)=>{setExerciseId(id);setSubtypeId(undefined)}} placeholder="Search exercise..."/><details className="inlineCreate"><summary>Create new exercise here</summary><div className="builderGrid"><input placeholder="New exercise name" value={newExName} onChange={e=>setNewExName(e.target.value)}/><select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={newExEquip} onChange={e=>setNewExEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div><SecondaryMusclePicker primary={newExMuscle} value={newExSecondary} onChange={setNewExSecondary}/><button className="secondary" onClick={createExerciseAndSelect}>Create and select</button></details></Card>
-      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><div className="singlePhotoPicker routineMachinePhoto"><label className="upload"><ImagePlus/> {newMachinePhoto ? "Change Machine Photo" : "Add Machine Photo"}<input hidden type="file" accept="image/*" onChange={e=>setNewMachinePhoto(e.target.files?.[0])}/></label>{newMachinePhoto&&<button className="secondary mini" onClick={()=>setNewMachinePhoto(undefined)}>Remove photo</button>}</div>{newMachinePhoto&&<img className="preview" src={blobUrl(newMachinePhoto)}/>}<button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
+      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
     </div>
-    {items.length>0&&<button className="secondary mini renumberBtn" onClick={renumberRoutine}>Fix numbering</button>}
-    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack"><button className="smallAction" onClick={()=>moveRoutineItem(it,-1)}>↑</button><button className="smallAction" onClick={()=>moveRoutineItem(it,1)}>↓</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
+    {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack"><button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:Math.max(1,it.order-1)}); refresh();}}>↑</button><button className="smallAction" onClick={async()=>{ await db.routineExercises.update(it.id!,{order:it.order+1}); refresh();}}>↓</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
   </section>
 }
 
@@ -1982,33 +1865,9 @@ function LogPage({data}:any){
   const [newVariantTag,setNewVariantTag]=useState('');
   const [newVariantTags,setNewVariantTags]=useState<string[]>([]);
   const [quickRoutineName,setQuickRoutineName]=useState('');
-  const [saveToast,setSaveToast]=useState('');
 
   useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),1000);return()=>clearInterval(i)},[]);
   useEffect(()=>{ let lock:any; async function requestLock(){ try{ if('wakeLock' in navigator && activeWorkout){ lock = await (navigator as any).wakeLock.request('screen'); } }catch{} } requestLock(); return ()=>{ try{lock?.release?.()}catch{} }; },[activeWorkout?.id]);
-  function showSaveToast(message:string){ setSaveToast(message); haptic(12); setTimeout(()=>setSaveToast(''),1800); }
-
-  const routineItems=(activeWorkout?.routineId ? (routineExercises as RoutineExercise[]).filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId) : []).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
-  const items=(activeWorkout ? (customMode || !activeWorkout.routineId ? customItems : routineItems) : []).filter((it:RoutineExercise)=>it && it.exerciseId);
-  const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
-  const completedSets = activeWorkout ? new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>`${s.exerciseId}-${s.subtypeId||0}-${s.setNumber}`)).size : 0;
-  const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
-  const progressPct = Math.min(100, Math.round((completedSets/targetSets)*100));
-  const completedExerciseIds = activeWorkout ? new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>s.exerciseId)) : new Set<number>();
-  const completedExercises = items.filter((it:RoutineExercise)=>completedExerciseIds.has(it.exerciseId)).length;
-  const firstIncompleteItem = activeWorkout ? items.find((it:RoutineExercise)=>{
-    const doneForItem = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id&&s.exerciseId===it.exerciseId).length;
-    return doneForItem < it.sets;
-  }) : undefined;
-
-  useEffect(()=>{
-    if(activeWorkout && items.length && !focusedItemId) {
-      setFocusedItemId(firstIncompleteItem?.id || items[0]?.id);
-    }
-    if(!activeWorkout && focusedItemId) {
-      setFocusedItemId(undefined);
-    }
-  },[activeWorkout?.id, items.length, focusedItemId, firstIncompleteItem?.id]);
 
   async function startRoutine(routineId:number){ const r=routines.find((x:Routine)=>x.id===routineId); const id=await db.workouts.add({routineId,title:r?.name||'Workout',date:today(),startedAt:now()}); setCustomMode(false); setActiveWorkoutId(id); refresh(); }
   async function startEmpty(){ const id=await db.workouts.add({title:'New Workout',date:today(),startedAt:now()}); setCustomMode(true); setActiveWorkoutId(id); refresh(); }
@@ -2071,62 +1930,37 @@ function LogPage({data}:any){
       ? customItems.length+1 
       : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
     const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId:addSubtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
+    const chosenExercise=exercises.find((e:Exercise)=>e.id===addExerciseId);
+    if(activeWorkout?.routineId && !customMode){
+      const newId = await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
+      setFocusedItemId(newId as number);
+      refresh();
+      setTimeout(()=>document.getElementById(`logger-${newId}`)?.scrollIntoView({behavior:'smooth',block:'center'}),180);
+    } else {
+      setCustomItems([...customItems,item]);
+      setFocusedItemId(item.id);
+      setTimeout(()=>document.getElementById(`logger-${item.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),180);
+    }
+    setAddExerciseId(undefined); setAddSubtypeId(undefined);
+    haptic(12);
+  }
+  async function createVariantAndAdd(){
+    if(!addExerciseId) return alert('Choose exercise first');
+    if(!newVariantName.trim()) return alert('Enter a variant or machine name');
+    const subtypeId = await db.subtypes.add({exerciseId:addExerciseId,name:newVariantName.trim(),defaultUnit:newVariantUnit,photo:newVariantPhoto,settings:[],tags:newVariantTags,createdAt:now()});
+    setAddSubtypeId(subtypeId);
+    const nextOrder = customMode || !activeWorkout?.routineId 
+      ? customItems.length+1 
+      : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
+    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
     if(activeWorkout?.routineId && !customMode){
       await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
-      refresh();
     } else {
       setCustomItems([...customItems,item]);
     }
-    setAddExerciseId(undefined); setAddSubtypeId(undefined);
-  }
-  async function createVariantAndAdd(){
-    const focusedRoutineItem = items.find((it:RoutineExercise)=>it.id===focusedItemId) || firstIncompleteItem || items[0];
-    const targetExerciseId = addExerciseId || focusedRoutineItem?.exerciseId;
-    const targetExercise = exercises.find((e:Exercise)=>e.id===targetExerciseId);
-    if(!targetExerciseId) return alert('Choose an exercise first, or open the exercise card you want this machine saved under.');
-    if(!newVariantName.trim()) return alert('Enter a variant or machine name');
-
-    const savedName = newVariantName.trim();
-    const subtypeId = await db.subtypes.add({
-      exerciseId:targetExerciseId,
-      name:savedName,
-      defaultUnit:newVariantUnit,
-      photo:newVariantPhoto,
-      settings:[],
-      tags:newVariantTags,
-      createdAt:now()
-    });
-
-    const alreadyInWorkout = items.some((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
-    if(!alreadyInWorkout){
-      const nextOrder = customMode || !activeWorkout?.routineId 
-        ? customItems.length+1 
-        : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
-      const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:targetExerciseId, subtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
-      if(activeWorkout?.routineId && !customMode){
-        const routineExerciseId = await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
-        setFocusedItemId(routineExerciseId as number);
-        setTimeout(()=>document.getElementById(`logger-${routineExerciseId}`)?.scrollIntoView({behavior:'smooth',block:'center'}),220);
-      } else {
-        setCustomItems([...customItems,item]);
-        setFocusedItemId(item.id);
-        setTimeout(()=>document.getElementById(`logger-${item.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),220);
-      }
-    } else {
-      const existingItem = items.find((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
-      if(existingItem?.id) setFocusedItemId(existingItem.id);
-      setAddSubtypeId(subtypeId);
-    }
-
-    setNewVariantName('');
-    setNewVariantPhoto(undefined);
-    setNewVariantTag('');
-    setNewVariantTags([]);
-    setAddExerciseId(targetExerciseId);
+    setNewVariantName(''); setNewVariantPhoto(undefined); setNewVariantTag(''); setNewVariantTags([]); setAddExerciseId(undefined); setAddSubtypeId(undefined);
     refresh();
-    showSaveToast(`✓ ${savedName} saved${targetExercise?.name ? ` for ${targetExercise.name}` : ''}`);
   }
-
 
   if(!activeWorkout && finishSummary) {
     const summaryMuscles = Array.isArray(finishSummary.muscles) ? finishSummary.muscles : [];
@@ -2144,14 +1978,29 @@ function LogPage({data}:any){
     <Card><h3>Existing routines</h3><div className="routineStartGrid">{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><button key={r.id} className="routineStartCard" onClick={()=>startRoutine(r.id!)}><span style={{background:r.color}}/><strong>{r.name}</strong><em>Tap to start</em></button>)}</div></Card>
     <Card><h3>Timeout protection</h3><p className="muted">Sets save immediately. If the page refreshes, LiftLog will try to resume your unfinished workout. During workouts, screen wake lock is requested where your browser supports it.</p></Card>
   </section>;
-return <section className="workoutV15">
+  const routineItems=(routineExercises as RoutineExercise[]).filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
+  const items=(customMode || !activeWorkout.routineId ? customItems : routineItems).filter((it:RoutineExercise)=>it && it.exerciseId);
+  const left = timer ? Math.max(0, rest - Math.floor((Date.now()-timer)/1000)) : rest;
+  const completedSets = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>`${s.exerciseId}-${s.subtypeId||0}-${s.setNumber}`)).size;
+  const targetSets = Math.max(1, items.reduce((a: number, it:RoutineExercise)=>a+(it.sets||0),0));
+  const progressPct = Math.min(100, Math.round((completedSets/targetSets)*100));
+  const completedExerciseIds = new Set(sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id).map((s:WorkoutSet)=>s.exerciseId));
+  const completedExercises = items.filter((it:RoutineExercise)=>completedExerciseIds.has(it.exerciseId)).length;
+  const firstIncompleteItem = items.find((it:RoutineExercise)=>{
+    const doneForItem = sets.filter((s:WorkoutSet)=>s.workoutId===activeWorkout.id&&s.exerciseId===it.exerciseId).length;
+    return doneForItem < it.sets;
+  });
+  useEffect(()=>{
+    if(activeWorkout && items.length && !focusedItemId) setFocusedItemId(firstIncompleteItem?.id || items[0]?.id);
+  },[activeWorkout?.id, items.length]);
+
+  return <section className="workoutV15">
     <Card cls="workoutHeaderSticky mobileWorkoutHeader"><div className="row"><div><h3>{activeWorkout.title}</h3><p className="muted">Started {new Date(activeWorkout.startedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p></div><button className="finishBtn" onClick={finish}>Finish</button></div>
       <div className="routineProgress">
         <div className="progressMeta"><span>{completedSets}/{targetSets} sets</span><span>{completedExercises}/{items.length} exercises</span><strong>{progressPct}%</strong></div>
         <div className="routineProgressBar"><b style={{width:`${progressPct}%`}} /></div>
       </div>
     </Card>
-    {saveToast&&<div className="saveSuccessToast">✓ {saveToast}</div>}
     <div className="floatingTimer smartTimer"><strong>{left}s</strong><button onClick={()=>setTimer(Date.now())}>Reset</button><button onClick={()=>setTimer((timer||Date.now())-15000)}>+15</button></div>
     <Card cls="addExercisePanel workoutVariantCreator">
       <h3>Add exercise or variant</h3>
@@ -2164,17 +2013,7 @@ return <section className="workoutV15">
       <div className="grid2">
         <button className="secondary" onClick={addCustomExercise}>+ Add selected</button>
       </div>
-      <details className="inlineCreate">
-        <summary>Save a machine variant for this exercise</summary>
-        <input value={newVariantName} onChange={e=>setNewVariantName(e.target.value)} placeholder="Variant name e.g. Cybex Leg Extension"/>
-        <select value={newVariantUnit} onChange={e=>setNewVariantUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
-        <div className="tagComposer"><input value={newVariantTag} onChange={e=>setNewVariantTag(e.target.value)} placeholder="Quick tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=newVariantTag.trim(); if(t){setNewVariantTags([...newVariantTags,t]); setNewVariantTag('');}}}>Add tag</button></div><Pills>{newVariantTags.map(t=><span key={t}>#{t}</span>)}</Pills><div className="singlePhotoPicker">
-          <label className="upload"><ImagePlus/> {newVariantPhoto ? 'Change Machine Photo' : 'Add Machine Photo'}<input hidden type="file" accept="image/*" onChange={e=>setNewVariantPhoto(e.target.files?.[0])}/></label>
-          {newVariantPhoto&&<button className="secondary mini" onClick={()=>setNewVariantPhoto(undefined)}>Remove photo</button>}
-        </div>
-        {newVariantPhoto&&<img className="preview" src={blobUrl(newVariantPhoto)}/>}
-        <button className="primary" onClick={createVariantAndAdd}>Save machine variant</button>
-      </details>
+      <p className="muted inlineHint">To save a new machine, open the exercise card below and use “+ Add machine for this exercise”.</p>
     </Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; const rep=replacements.find((r:WorkoutReplacement)=>r.workoutId===activeWorkout.id&&r.routineExerciseId===it.id);
       const actualEx=rep ? exercises.find((e:Exercise)=>e.id===rep.replacementExerciseId) || ex : ex;
@@ -2192,11 +2031,8 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
   ex = ex || {id:-1,name:'Missing exercise',muscle:'Unknown',secondaryMuscles:[],equipment:'Unknown',createdAt:now()};
   workout = workout || {id:-1,title:'Workout',date:today(),startedAt:now()};
   item = item || {id:-1,routineId:-1,exerciseId:ex.id,order:0,sets:0,reps:'',rest:0,createdAt:now()};
-  subtypes = Array.isArray(subtypes) ? subtypes : [];
-  workouts = Array.isArray(workouts) ? workouts : [];
-  sets = Array.isArray(sets) ? sets : [];
   const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
-  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false);
+  const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false); const [machineName,setMachineName]=useState(''); const [machineUnit,setMachineUnit]=useState<Unit>(defaultUnit); const [machinePhoto,setMachinePhoto]=useState<Blob|undefined>(); const [machineTag,setMachineTag]=useState(''); const [machineTags,setMachineTags]=useState<string[]>([]); const [machineSaved,setMachineSaved]=useState('');
   useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
   if(missingLoggerData) return <Card cls="loggerV15"><p className="muted">This exercise could not be loaded safely.</p></Card>;
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
@@ -2230,6 +2066,20 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
   }
   async function clearSwap(){
     if(replacement?.id){ await db.replacements.delete(replacement.id); refresh(); }
+  }
+  async function saveMachineForExercise(){
+    if(!machineName.trim()) return alert('Enter machine name');
+    const subtypeId = await db.subtypes.add({exerciseId:ex.id,name:machineName.trim(),defaultUnit:machineUnit,photo:machinePhoto,settings:[],tags:machineTags,createdAt:now()});
+    setSid(subtypeId as number);
+    const saved = machineName.trim();
+    setMachineName('');
+    setMachinePhoto(undefined);
+    setMachineTag('');
+    setMachineTags([]);
+    setMachineSaved(`✓ ${saved} saved`);
+    haptic(12);
+    setTimeout(()=>setMachineSaved(''),1600);
+    refresh();
   }
   async function save(n:number){
     if(savingSet===n) return;
@@ -2269,7 +2119,18 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
       {swapOpen&&<div className="swapChoices">
         {suggestedReplacementsFor(originalEx||ex, allExercises||[]).map((s:Exercise)=><button key={s.id} onClick={()=>applySwap(s.id!)}><strong>{s.name}</strong><span>{s.muscle} · {(s.secondaryMuscles||[]).join(', ')}</span></button>)}
       </div>}
-      <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>
+      <div className="grid2"><label>Variant / machine<select value={sid??''} onChange={e=>setSid(e.target.value?Number(e.target.value):undefined)}><option value="">No variant</option>{subtypes.map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select></label><label>Unit{!subtype?<select value={unit} onChange={e=>setUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>:<div className="unitLocked">{unit}</div>}</label></div>{subtype?.photo&&<details className="workoutMachinePhoto"><summary><img src={blobUrl(subtype.photo)}/><span>Tap to expand machine photo</span></summary><img className="machinePhotoLarge" src={blobUrl(subtype.photo)}/></details>}
+      <details className="inlineCreate workoutInlineMachineCreator">
+        <summary>+ Add machine for {ex.name}</summary>
+        <input value={machineName} onChange={e=>setMachineName(e.target.value)} placeholder={`Machine name for ${ex.name}`}/>
+        <select value={machineUnit} onChange={e=>setMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select>
+        <div className="singlePhotoPicker"><label className="upload"><ImagePlus/> {machinePhoto?'Change Machine Photo':'Add Machine Photo'}<input hidden type="file" accept="image/*" onChange={async e=>setMachinePhoto(await compressImageFile(e.target.files?.[0]))}/></label>{machinePhoto&&<button className="secondary mini" onClick={()=>setMachinePhoto(undefined)}>Remove photo</button>}</div>
+        {machinePhoto&&<img className="preview" src={blobUrl(machinePhoto)}/>}
+        <div className="tagComposer"><input value={machineTag} onChange={e=>setMachineTag(e.target.value)} placeholder="Tag e.g. Seat 4"/><button className="secondary" onClick={()=>{const t=machineTag.trim(); if(t){setMachineTags([...machineTags,t]); setMachineTag('');}}}>Add tag</button></div>
+        <Pills>{machineTags.map((t:string)=><span key={t}>#{t}</span>)}</Pills>
+        {machineSaved&&<div className="saveSuccessInline">{machineSaved}</div>}
+        <button className="primary" onClick={saveMachineForExercise}>Save machine to this exercise</button>
+      </details>
       {subtype?.tags?.length?<div className="machineTagsInline">{subtype.tags.map((t:string)=><span key={t}>#{t}</span>)}</div>:null}<div className="rirExplainer"><strong>RIR</strong> = reps in reserve. Example: RIR 2 means you could have done about 2 more reps.</div>
       {prMessage && <div className="prToastInline">{prMessage}</div>}
       {activeInput&&<div className="keyboardAssistPanel">
@@ -2304,10 +2165,6 @@ function CalendarPage({data}:any){
 
   async function planRoutine(date:string){
     if(!selectedRoutine) return alert('Choose a routine first');
-    const existing = plannedWorkouts.filter((p:PlannedWorkout)=>p.date===date);
-    const duplicate = existing.some((p:PlannedWorkout)=>p.type==='workout' && p.routineId===selectedRoutine);
-    if(duplicate) return alert('That routine is already planned for this day.');
-    for(const p of existing.filter((p:PlannedWorkout)=>p.type==='rest')) if(p.id) await db.plannedWorkouts.delete(p.id);
     await db.plannedWorkouts.add({routineId:selectedRoutine, type:'workout', date, createdAt:now()});
     refresh();
   }
@@ -2317,10 +2174,6 @@ function CalendarPage({data}:any){
     refresh();
   }
   async function planRest(date:string){
-    const existing = plannedWorkouts.filter((p:PlannedWorkout)=>p.date===date);
-    if(existing.some((p:PlannedWorkout)=>p.type==='rest')) return alert('Rest day is already planned for this day.');
-    if(existing.some((p:PlannedWorkout)=>p.type==='workout') && !confirm('Replace planned workouts with a rest day?')) return;
-    for(const p of existing) if(p.id) await db.plannedWorkouts.delete(p.id);
     await db.plannedWorkouts.add({type:'rest', date, note:'Rest day', createdAt:now()});
     refresh();
   }
@@ -2332,7 +2185,6 @@ function CalendarPage({data}:any){
   }
 
   return <section>
-    <FeatureHelp title="About Calendar"><p>Plan workouts or rest days for the week. A rest day replaces workout plans on that date so your calendar stays clean.</p></FeatureHelp>
     <Card cls="premiumCard calendarToolbar">
       <div className="calendarTop">
         <button className="smallAction" onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Previous</button>
@@ -2388,18 +2240,18 @@ function ProgressLineChart({points,unit,label}:{points:{date:string;value:number
 
 function StatsPage({data}:any){
   const {settings,exercises,workouts,sets}=data;
-  const favouriteExercises = exercises.filter((e:Exercise)=>e.favourite);
+  const favouriteExercises = useMemo(()=>exercises.filter((e:Exercise)=>e.favourite),[exercises]);
   const graphExercises = favouriteExercises.length ? favouriteExercises : exercises;
   const [showOnlyFavourites,setShowOnlyFavourites]=useState(true);
-  const availableExercises = showOnlyFavourites && favouriteExercises.length ? favouriteExercises : exercises;
+  const availableExercises = useMemo(()=>showOnlyFavourites && favouriteExercises.length ? favouriteExercises : exercises,[showOnlyFavourites,favouriteExercises,exercises]);
   const [eid,setEid]=useState<number|undefined>(availableExercises[0]?.id || exercises[0]?.id);
-  const selectedExercise = exercises.find((e:Exercise)=>e.id===eid);
-  const filtered=sets.filter((s:WorkoutSet)=>s.exerciseId===eid).sort((a:WorkoutSet,b:WorkoutSet)=>a.createdAt.localeCompare(b.createdAt));
-  const weeklyVolumes = weeklyVolumeByBucket(exercises, workouts, sets);
-  const totalWeeklyVolume = Object.values(weeklyVolumes).reduce((a,b)=>a+b,0);
-  const maxVolume = Math.max(...Object.values(weeklyVolumes), 1);
-  const points = filtered.map((s:WorkoutSet)=>({date:s.createdAt.slice(0,10), value:e1rm(convert(s.weight,s.unit,settings.unit),s.reps)})).slice(-12);
-  const weightPoints = filtered.map((s:WorkoutSet)=>({date:s.createdAt.slice(0,10), value:convert(s.weight,s.unit,settings.unit)})).slice(-12);
+  const selectedExercise = useMemo(()=>exercises.find((e:Exercise)=>e.id===eid),[exercises,eid]);
+  const filtered=useMemo(()=>sets.filter((s:WorkoutSet)=>s.exerciseId===eid).sort((a:WorkoutSet,b:WorkoutSet)=>a.createdAt.localeCompare(b.createdAt)),[sets,eid]);
+  const weeklyVolumes = useMemo(()=>weeklyVolumeByBucket(exercises, workouts, sets),[exercises,workouts,sets]);
+  const totalWeeklyVolume = useMemo(()=>Object.values(weeklyVolumes).reduce((a,b)=>a+b,0),[weeklyVolumes]);
+  const maxVolume = useMemo(()=>Math.max(...Object.values(weeklyVolumes), 1),[weeklyVolumes]);
+  const points = useMemo(()=>filtered.map((s:WorkoutSet)=>({date:s.createdAt.slice(0,10), value:e1rm(convert(s.weight,s.unit,settings.unit),s.reps)})).slice(-12),[filtered,settings.unit]);
+  const weightPoints = useMemo(()=>filtered.map((s:WorkoutSet)=>({date:s.createdAt.slice(0,10), value:convert(s.weight,s.unit,settings.unit)})).slice(-12),[filtered,settings.unit]);
 
   return <section>
     <Card>
@@ -2538,9 +2390,9 @@ function normaliseNutritionDay(day: DailyNutritionLog): DailyNutritionLog {
 function NutritionPage(){
   const [logs,setLogs]=useState<Record<string, DailyNutritionLog>>({});
   const [date,setDate]=useState(nutritionToday());
-  const rawDay = logs[date] || emptyNutritionDay(date);
-  const day = normaliseNutritionDay(rawDay);
-  const [mealDraft,setMealDraft]=useState({type:'Lunch' as MealType,title:'',notes:'',quality:'Okay' as MealQuality,proteinIncluded:true,fruitVegIncluded:false});
+  const rawDay = useMemo(()=>logs[date] || emptyNutritionDay(date),[logs,date]);
+  const day = useMemo(()=>normaliseNutritionDay(rawDay),[rawDay]);
+  const [mealDraft,setMealDraft]=useState({type:'Other' as MealType,title:'',notes:'',quality:'Okay' as MealQuality,proteinIncluded:false,fruitVegIncluded:false});
 
   useEffect(()=>{setLogs(loadNutritionLogs())},[]);
   function updateDay(next:DailyNutritionLog){const updated={...logs,[date]:normaliseNutritionDay(next)}; setLogs(updated); saveNutritionLogs(updated);}
@@ -2552,36 +2404,26 @@ function NutritionPage(){
     if(!mealDraft.title.trim()) return;
     const meal:MealLog={id:nutritionUid(),date,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),type:mealDraft.type,title:mealDraft.title.trim(),notes:mealDraft.notes.trim(),quality:mealDraft.quality,proteinIncluded:mealDraft.proteinIncluded,fruitVegIncluded:mealDraft.fruitVegIncluded};
     updateDay({...day,meals:[meal,...day.meals],proteinServings:(day.proteinServings||0)+(meal.proteinIncluded?1:0)});
-    setMealDraft({type:'Lunch',title:'',notes:'',quality:'Okay',proteinIncluded:true,fruitVegIncluded:false});
+    setMealDraft({type:'Other',title:'',notes:'',quality:'Okay',proteinIncluded:false,fruitVegIncluded:false});
   }
   function deleteMeal(id:string){
     const meal=day.meals.find(m=>m.id===id);
     updateDay({...day,meals:day.meals.filter(m=>m.id!==id),proteinServings:Math.max(0,(day.proteinServings||0)-(meal?.proteinIncluded?1:0))});
   }
 
-  const score=nutritionScoreV19(day);
-  const habits=nutritionHabitsV20(day);
-  const completedHabits=habits.filter(h=>h.done).length;
+  const score=useMemo(()=>nutritionScoreV19(day),[day]);
+  const habits=useMemo(()=>nutritionHabitsV20(day),[day]);
+  const completedHabits=useMemo(()=>habits.filter(h=>h.done).length,[habits]);
   const protein = day.proteinServings || 0;
   const proteinTarget = day.proteinTarget || 3;
-  const qualityCounts={great:day.meals.filter(m=>m.quality==='Great').length, okay:day.meals.filter(m=>m.quality==='Okay').length, off:day.meals.filter(m=>m.quality==='Off-track').length};
-  const snackCount = day.meals.filter(m=>m.type==='Snack').length;
-  const mealCount = day.meals.filter(m=>m.type!=='Snack').length;
-  const healthyCount = day.meals.filter(m=>m.quality==='Great' || (m.quality==='Okay' && (m.proteinIncluded || m.fruitVegIncluded))).length;
-  const offTrackCount = day.meals.filter(m=>m.quality==='Off-track').length;
-  const proteinMet = protein >= proteinTarget;
-  const waterMet = day.waterMl >= 2000;
-  const fruitVegMet = day.meals.some(m=>m.fruitVegIncluded);
-  const consistencyMet = day.meals.length >= 3;
-  const lateSnackFlag = day.meals.some(m=>m.type==='Snack' && /late|night|after dinner|midnight/i.test(`${m.title} ${m.notes||''}`));
-  const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
-  const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
-  const nextSuggestion=score>=90?'Strong day. Repeat the basics tomorrow.':day.waterMl<2000?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':!(day.reflection||'').trim()?'Write a quick reflection.':'You are on track.';
+  const qualityCounts=useMemo(()=>({great:day.meals.filter(m=>m.quality==='Great').length, okay:day.meals.filter(m=>m.quality==='Okay').length, off:day.meals.filter(m=>m.quality==='Off-track').length}),[day.meals]);
+  const weekStats=useMemo(()=>Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};}),[date,logs]);
+  const creatineStreak=useMemo(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;},[logs]);
+  const nextSuggestion=useMemo(()=>score>=90?'Strong day. Repeat the basics tomorrow.':day.waterMl<2000?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':!(day.reflection||'').trim()?'Write a quick reflection.':'You are on track.',[score,day.waterMl,day.meals.length,day.reflection,protein,proteinTarget]);
   function exportBackup(){downloadNutritionJson(logs, `LiftLog_Nutrition_Backup_${nutritionToday()}.json`);}
   async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
 
   return <section className="nutritionPage nutritionPro">
-    <FeatureHelp title="About Nutrition"><p>This is not strict calorie tracking. Use it to spot patterns: hydration, protein, caffeine, snacking, and whether meals felt great/okay/off-track.</p></FeatureHelp>
     <Card cls="hero nutritionHeroPro">
       <div className="nutritionHeroGrid">
         <div><div className="eyebrow lightText">NUTRITION ACCOUNTABILITY</div><h2>Fuel Dashboard</h2><p>Track water, creatine, caffeine, protein and meals without calorie obsession.</p></div>
@@ -2590,25 +2432,6 @@ function NutritionPage(){
     </Card>
 
     <Card cls="nutritionCommandCard"><div><span>Today's focus</span><strong>{nextSuggestion}</strong></div><input className="date-picker" type="date" value={date} onChange={e=>setDate(e.target.value)}/></Card>
-    <Card cls="nutritionPatternCard">
-      <div className="sectionHeader">
-        <div><h3>Today's Eating Pattern</h3><p className="muted">Simple behaviour snapshot, not calorie tracking.</p></div>
-        <div className="nutritionScoreBadge"><strong>{score}</strong><span>/100</span></div>
-      </div>
-      <div className="nutritionPatternGrid">
-        <div><span>Meals</span><strong>{mealCount}</strong></div>
-        <div><span>Snacks</span><strong>{snackCount}</strong></div>
-        <div><span>Off-track</span><strong>{offTrackCount}</strong></div>
-        <div><span>Healthy/okay</span><strong>{healthyCount}</strong></div>
-      </div>
-      <div className="nutritionSignalList">
-        <span className={proteinMet?'good':'warn'}>{proteinMet?'✓':'○'} Protein goal</span>
-        <span className={waterMet?'good':'warn'}>{waterMet?'✓':'○'} Water goal</span>
-        <span className={fruitVegMet?'good':'warn'}>{fruitVegMet?'✓':'○'} Fruit/Veg</span>
-        <span className={consistencyMet?'good':'warn'}>{consistencyMet?'✓':'○'} Meal consistency</span>
-        <span className={lateSnackFlag?'bad':'good'}>{lateSnackFlag?'!':'✓'} Late snack check</span>
-      </div>
-    </Card>
     <Card cls="habitChecklistCard">
       <div className="sectionHeader">
         <div><h3>Daily Habits</h3><p className="muted">{score}% complete · starts from 0 each day</p></div>
@@ -2877,7 +2700,7 @@ function BackupPage({data}:any){
 
 
 function HistoryPage({data}:any){
-  const {exercises,routines,workouts,sets,replacements,plannedWorkouts=[],refresh}=data;
+  const {exercises,routines,workouts,sets,replacements,refresh}=data;
   const [selectedId,setSelectedId]=useState<number|undefined>();
   const [editingSet,setEditingSet]=useState<WorkoutSet|undefined>();
   const [editWeight,setEditWeight]=useState('');
@@ -2887,9 +2710,9 @@ function HistoryPage({data}:any){
   const [editMealTitle,setEditMealTitle]=useState('');
   const [editMealNotes,setEditMealNotes]=useState('');
   const [nutritionLogs,setNutritionLogs]=useState<Record<string,DailyNutritionLog>>(()=>loadNutritionLogs());
-  const [filter,setFilter]=useState<'all'|'workouts'|'nutrition'|'prs'|'rest'>('all');
-  const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
-  const selected = completed.find((w:Workout)=>w.id===selectedId);
+  const [visibleDays,setVisibleDays]=useState(18);
+  const completed = useMemo(()=>workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt)),[workouts]);
+  const selected = useMemo(()=>completed.find((w:Workout)=>w.id===selectedId),[completed,selectedId]);
 
   async function deleteSet(id:number|undefined){
     if(!id || !confirm('Delete this set?')) return;
@@ -2953,101 +2776,33 @@ function HistoryPage({data}:any){
     </section>
   }
 
-  const dayKeys = Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs), ...plannedWorkouts.map((p:PlannedWorkout)=>p.date)])).sort((a,b)=>b.localeCompare(a)).slice(0,30);
-  const recentDate = (d:string)=>new Date(d)>=new Date(Date.now()-7*86400000);
-  const workouts7 = completed.filter((w:Workout)=>recentDate(w.date));
-  const totalVol7 = workouts7.reduce((a,w)=>a+workoutVolume(w,sets),0);
-  const nutritionEntries7 = Object.entries(nutritionLogs).filter(([d])=>recentDate(d)).map(([d,n])=>normaliseNutritionDay(n));
-  const nutritionDays7 = nutritionEntries7.length;
-  const meals7 = nutritionEntries7.reduce((a,n)=>a+(n.meals?.length||0),0);
-  const waterGoalDays = nutritionEntries7.filter(n=>n.waterMl>=2000).length;
-  const proteinGoalDays = nutritionEntries7.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length;
-  const offTrackDays = nutritionEntries7.filter(n=>n.meals.some(m=>m.quality==='Off-track')).length;
-  const prCount7 = sets.filter((s:WorkoutSet)=>recentDate(s.createdAt.slice(0,10))).filter((s:WorkoutSet)=>{
-    const prior=sets.filter((x:WorkoutSet)=>x.exerciseId===s.exerciseId&&x.createdAt<s.createdAt);
-    return prior.length && e1rm(kgValue(s),s.reps)>Math.max(...prior.map((x:WorkoutSet)=>e1rm(kgValue(x),x.reps)));
-  }).length;
+  const recentCutoff = useMemo(()=>Date.now()-7*86400000,[]);
+  const dayKeys = useMemo(()=>Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs)])).sort((a,b)=>b.localeCompare(a)).slice(0,visibleDays),[completed,nutritionLogs,visibleDays]);
+  const totalVol7 = useMemo(()=>completed.filter((w:Workout)=>new Date(w.date).getTime()>=recentCutoff).reduce((a,w)=>a+workoutVolume(w,sets),0),[completed,sets,recentCutoff]);
+  const nutritionDays7 = useMemo(()=>Object.keys(nutritionLogs).filter(d=>new Date(d).getTime()>=recentCutoff).length,[nutritionLogs,recentCutoff]);
+  const meals7 = useMemo(()=>Object.entries(nutritionLogs).filter(([d])=>new Date(d).getTime()>=recentCutoff).reduce((a,[,n])=>a+((n.meals||[]).filter((m:MealLog)=>m.type!=='Snack').length),0),[nutritionLogs,recentCutoff]);
 
   return <section>
-    <FeatureHelp title="About History"><p>Review workouts and nutrition as a timeline. Tap a workout to edit sets; tap a meal chip to edit it. Use filters to focus on workouts, nutrition, PRs or rest days.</p></FeatureHelp>
+    <Card cls="hero heroV12"><h2>History</h2><p>Training and nutrition history in one place. You can edit/delete incorrect workouts, sets, meals, or nutrition days.</p></Card>
     {editingMeal&&<Card cls="editPanelV31"><h3>Edit meal</h3><input value={editMealTitle} onChange={e=>setEditMealTitle(e.target.value)} placeholder="Meal title"/><textarea value={editMealNotes} onChange={e=>setEditMealNotes(e.target.value)} placeholder="Meal notes"/><div className="grid2"><button className="primary" onClick={saveMealEdit}>Save meal</button><button className="secondary" onClick={()=>setEditingMeal(undefined)}>Cancel</button></div></Card>}
-
-    <Card cls="historyWeekHero">
-      <div>
-        <span className="eyebrow">THIS WEEK</span>
-        <h2>Training + nutrition snapshot</h2>
-        <p className="muted">{workouts7.length} workouts · {nutritionDays7}/7 nutrition days · {prCount7} PR signal{prCount7===1?'':'s'}</p>
-      </div>
-      <div className="historyHeroStats">
-        <strong>{fmtVol(totalVol7)}</strong>
-        <span>7-day volume</span>
-      </div>
-    </Card>
-
-    <div className="historySummaryGrid upgraded">
-      <Card><span className="eyebrow">Water goal</span><h3>{waterGoalDays}/7</h3></Card>
-      <Card><span className="eyebrow">Protein goal</span><h3>{proteinGoalDays}/7</h3></Card>
+    <div className="historySummaryGrid">
+      <Card><span className="eyebrow">7-day volume</span><h3>{fmtVol(totalVol7)}</h3></Card>
+      <Card><span className="eyebrow">Workouts</span><h3>{completed.filter((w:Workout)=>new Date(w.date)>=new Date(Date.now()-7*86400000)).length}</h3></Card>
+      <Card><span className="eyebrow">Nutrition days</span><h3>{nutritionDays7}</h3></Card>
       <Card><span className="eyebrow">Meals logged</span><h3>{meals7}</h3></Card>
-      <Card><span className="eyebrow">Off-track days</span><h3>{offTrackDays}</h3></Card>
     </div>
-
-    <div className="historyFilterTabs">
-      {(['all','workouts','nutrition','prs','rest'] as const).map(f=><button key={f} className={filter===f?'active':''} onClick={()=>setFilter(f)}>{f==='all'?'All':f==='prs'?'PRs':f==='rest'?'Rest Days':f[0].toUpperCase()+f.slice(1)}</button>)}
-    </div>
-
-    <div className="historyTimeline">
-      {dayKeys.length ? dayKeys.map(day=>{
-        const dayWorkouts=completed.filter((w:Workout)=>w.date===day);
-        const dayRest=plannedWorkouts.filter((p:PlannedWorkout)=>p.date===day && p.type==='rest');
-        const n=nutritionLogs[day] ? normaliseNutritionDay(nutritionLogs[day]) : undefined;
-        const dayHasPR = sets.some((s:WorkoutSet)=>s.createdAt.slice(0,10)===day && sets.some((x:WorkoutSet)=>x.exerciseId===s.exerciseId&&x.createdAt<s.createdAt&&e1rm(kgValue(s),s.reps)>e1rm(kgValue(x),x.reps)));
-        if(filter==='workouts' && !dayWorkouts.length) return null;
-        if(filter==='nutrition' && !n) return null;
-        if(filter==='prs' && !dayHasPR) return null;
-        if(filter==='rest' && !dayRest.length) return null;
-        return <Card key={day} cls="timelineDayCard">
-          <div className="timelineDateRail">
-            <strong>{new Date(day).toLocaleDateString([], {day:'numeric'})}</strong>
-            <span>{new Date(day).toLocaleDateString([], {month:'short'})}</span>
-            <em>{new Date(day).toLocaleDateString([], {weekday:'short'})}</em>
-          </div>
-          <div className="timelineContent">
-            {dayRest.map((r:PlannedWorkout)=><div className="timelineRest" key={r.id||r.date}><strong>Rest Day</strong><em>Recovery planned</em></div>)}
-            {dayWorkouts.map((w:Workout)=>{ 
-              const routine=routines.find((r:Routine)=>r.id===w.routineId); 
-              const ss=workoutSetsFor(w,sets); 
-              const vol=workoutVolume(w,sets);
-              const muscles=Array.from(new Set(ss.map((s:WorkoutSet)=>exercises.find((e:Exercise)=>e.id===s.exerciseId)?.muscle).filter(Boolean))).slice(0,4);
-              return <div className="timelineWorkout" key={w.id}>
-                <button className="timelineWorkoutMain" onClick={()=>setSelectedId(w.id)}>
-                  <span style={{background:routine?.color||'#2563eb'}}/>
-                  <div><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(vol)} · {durationMinutes(w)} min</em></div>
-                </button>
-                <Pills>{muscles.map((m:any)=><span key={m}>{m}</span>)}</Pills>
-                <button className="danger mini subtleDelete" onClick={()=>deleteWorkout(w)}>Delete</button>
-              </div> 
-            })}
-            {n ? <div className="timelineNutrition">
-              <div className="timelineNutritionTop">
-                <strong>Nutrition · {nutritionScoreV19(n)}/100</strong>
-                <button className="danger mini subtleDelete" onClick={()=>deleteNutritionDay(day)}>Delete day</button>
-              </div>
-              <div className="nutritionMiniStats">
-                <span>{n.meals.length} meals</span>
-                <span>{n.meals.filter(m=>m.type==='Snack').length} snacks</span>
-                <span>{n.waterMl}ml water</span>
-                <span>Protein {(n.proteinServings??0)}/{n.proteinTarget??3}</span>
-              </div>
-              {n.meals.length>0&&<div className="mealChipRow">{n.meals.slice(0,6).map(m=><button key={m.id} className={`mealChip ${m.quality.toLowerCase().replace('-','')}`} onClick={()=>beginMealEdit(day,m)} onContextMenu={(e)=>{e.preventDefault();deleteMeal(day,m.id)}}>{m.type}: {m.title}</button>)}</div>}
-              {n.reflection&&<p className="muted">{n.reflection.slice(0,110)}</p>}
-            </div> : <p className="muted">No nutrition logged.</p>}
-          </div>
-        </Card>
-      }) : <EmptyState title="No history yet" body="Start your first workout or log nutrition to build your timeline." action={undefined} />}
-    </div>
+    {dayKeys.length ? dayKeys.map(day=>{
+      const dayWorkouts=completed.filter((w:Workout)=>w.date===day);
+      const n=nutritionLogs[day] ? normaliseNutritionDay(nutritionLogs[day]) : undefined;
+      return <Card key={day} cls="combinedDayCard">
+        <div className="row"><h3>{new Date(day).toLocaleDateString([], {weekday:'long', day:'numeric', month:'short'})}</h3>{n&&<button className="danger mini" onClick={()=>deleteNutritionDay(day)}>Delete nutrition</button>}</div>
+        {dayWorkouts.map((w:Workout)=>{ const routine=routines.find((r:Routine)=>r.id===w.routineId); const ss=workoutSetsFor(w,sets); return <div className="combinedWorkoutRowWrap" key={w.id}><button className="combinedWorkoutRow detailed" onClick={()=>setSelectedId(w.id)}><span style={{background:routine?.color||'#2563eb'}}/><strong>{w.title}</strong><em>{ss.length} sets · {fmtVol(workoutVolume(w,sets))} · {durationMinutes(w)} min · Top: {ss.length?exercises.find((e:Exercise)=>e.id===ss[0].exerciseId)?.name:'—'}</em></button><button className="danger mini" onClick={()=>deleteWorkout(w)}>Delete</button></div> })}
+        {n ? <div className="combinedNutritionRow"><strong>Nutrition · {nutritionScoreV19(n)}%</strong><span>Water {n.waterMl}ml · Meals {n.meals.filter(m=>m.type!=='Snack').length} · Protein {(n.proteinServings??0)}/{n.proteinTarget??3} · Caffeine {n.caffeineMg}mg · {n.creatineTaken?'Creatine ✓':'Creatine ○'}</span>{n.reflection&&<em>{n.reflection.slice(0,90)}</em>}<div className="mealDeleteList">{n.meals.slice(0,4).map(m=><span key={m.id}><button onClick={()=>beginMealEdit(day,m)}>Edit {m.type}</button><button onClick={()=>deleteMeal(day,m.id)}>Delete {m.type}</button></span>)}</div></div> : <p className="muted">No nutrition logged.</p>}
+      </Card>
+    }) : <Card><p className="muted">No history yet.</p></Card>}
+    {dayKeys.length >= visibleDays && <button className="secondary loadMoreHistory" onClick={()=>setVisibleDays(v=>v+18)}>Load more history</button>}
   </section>
 }
-
 
 class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasError:boolean;error?:any}> {
   constructor(props:{children:React.ReactNode}) {
@@ -3096,6 +2851,5 @@ class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasErro
 function PageCrashGuard({children}:{children:React.ReactNode}) {
   return <LiftLogErrorBoundary>{children}</LiftLogErrorBoundary>;
 }
-
 
 
