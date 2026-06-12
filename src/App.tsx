@@ -33,7 +33,7 @@ function safeText(x:any, fallback=''){ return typeof x==='string' && x.trim()?x:
 function safeArray<T>(x:T[]|undefined|null):T[]{ return Array.isArray(x)?x:[]; }
 
 
-async function compressImageFile(file?:File|Blob, maxSize=960, quality=0.72):Promise<Blob|undefined>{
+async function compressImageFile(file?:File|Blob, maxSize=800, quality=0.65):Promise<Blob|undefined>{
   if(!file || !('type' in file) || !(file as File).type?.startsWith?.('image/')) return file as Blob|undefined;
   try{
     const bitmap = await createImageBitmap(file);
@@ -1325,9 +1325,9 @@ function muscleHeatValues(exercises: Exercise[], workouts: Workout[], sets: Work
 function BodyHeatMap({values, exercises=[], workouts=[], sets=[]}:{values:Record<string, number>; exercises?:Exercise[]; workouts?:Workout[]; sets?:WorkoutSet[]}) {
   const [mode,setMode]=useState<'volume'|'recovery'>('volume');
   const [selectedMuscle,setSelectedMuscle]=useState<string|undefined>();
-  const recovery = recoveryValuesFromVolume(values, exercises, workouts, sets);
+  const recovery = useMemo(()=>mode==='recovery'?recoveryValuesFromVolume(values, exercises, workouts, sets):{},[mode,values,exercises,workouts,sets]);
   const display = mode==='volume' ? values : recovery;
-  const max = mode==='volume' ? Math.max(...Object.values(values), 1) : 100;
+  const max = useMemo(()=>mode==='volume' ? Math.max(...Object.values(values), 1) : 100,[mode, values]);
   const cls = (key:string) => `hmPart ${mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}`;
   const label = (key:string, name:string) => <button className="hmLabel" onClick={()=>setSelectedMuscle(key)}><span className={mode==='volume' ? heatIntensityClass(display[key] || 0, max) : recoveryClass(display[key] || 0)}></span>{name}<em>{mode==='volume'?fmtVol(display[key]||0):`${Math.round(display[key]||0)}%`}</em></button>;
   const selectedRecovery = selectedMuscle ? recovery[selectedMuscle]||0 : 0;
@@ -1552,27 +1552,27 @@ function FeatureHelp({title,children}:{title:string;children:React.ReactNode}) {
 
 function HomePage({data}:any){
   const {exercises,subtypes,routines,routineExercises,workouts,sets,plannedWorkouts=[],setPage,startRoutineWorkout}=data;
-  const weekWorkouts = workoutsThisWeek(workouts);
-  const weekSets = sets.filter((s:WorkoutSet)=>weekWorkouts.some((w:Workout)=>w.id===s.workoutId));
-  const vol = weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0);
-  const lastWorkout = workouts[0];
-  const todayPlan = plannedWorkouts.find((p:PlannedWorkout)=>p.date===today() && p.type!=='rest' && p.routineId && !workouts.some((w:Workout)=>w.date===today() && w.routineId===p.routineId && w.endedAt));
-  const scheduledRoutine = todayPlan?.routineId ? routines.find((r:Routine)=>r.id===todayPlan.routineId) : undefined;
-  const suggestedRoutine = scheduledRoutine || routines.find((r:Routine)=>!r.archived) || routines[0];
-  const groups = groupVolumesForWeek(exercises, workouts, sets);
-  const maxGroup = Math.max(...Object.values(groups), 1);
-  const prs = recentPRItems(exercises, sets);
-  const recommended = recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets);
-  const recoveryMuscles = ['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'];
   const [homePanel,setHomePanel]=useState<'overview'|'recovery'|'map'|'prs'>('overview');
+  const weekWorkouts = useMemo(()=>workoutsThisWeek(workouts),[workouts]);
+  const weekWorkoutIds = useMemo(()=>new Set(weekWorkouts.map((w:Workout)=>w.id)),[weekWorkouts]);
+  const weekSets = useMemo(()=>sets.filter((s:WorkoutSet)=>weekWorkoutIds.has(s.workoutId)),[sets,weekWorkoutIds]);
+  const vol = useMemo(()=>weekSets.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0),[weekSets]);
+  const lastWorkout = workouts[0];
+  const todayPlan = useMemo(()=>plannedWorkouts.find((p:PlannedWorkout)=>p.date===today() && p.type!=='rest' && p.routineId && !workouts.some((w:Workout)=>w.date===today() && w.routineId===p.routineId && w.endedAt)),[plannedWorkouts,workouts]);
+  const scheduledRoutine = useMemo(()=>todayPlan?.routineId ? routines.find((r:Routine)=>r.id===todayPlan.routineId) : undefined,[todayPlan,routines]);
+  const suggestedRoutine = scheduledRoutine || routines.find((r:Routine)=>!r.archived) || routines[0];
+  const groups = useMemo(()=>homePanel==='overview'||homePanel==='map'?groupVolumesForWeek(exercises, workouts, sets):{Chest:0,Back:0,Shoulders:0,Legs:0,Arms:0,Core:0},[homePanel,exercises,workouts,sets]);
+  const maxGroup = useMemo(()=>Math.max(...Object.values(groups), 1),[groups]);
+  const prs = useMemo(()=>homePanel==='prs'||homePanel==='overview'?recentPRItems(exercises, sets):[],[homePanel,exercises,sets]);
+  const recommended = useMemo(()=>recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets),[exercises,routines,routineExercises,workouts,sets]);
+  const recoveryMuscles = useMemo(()=>['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'],[]);
   const lastRoutine = lastWorkout?.routineId ? routines.find((r:Routine)=>r.id===lastWorkout.routineId) : suggestedRoutine;
-  const nutritionLogsHome = loadNutritionLogs();
-  const weekNutrition = Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=d.toISOString().slice(0,10); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});
-  const waterGoalDaysHome = weekNutrition.filter(n=>n.waterMl>=2000).length;
-  const proteinGoalDaysHome = weekNutrition.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length;
-  const recoveryScoresHome = recoveryMuscles.map(m=>({m,rec:recoveryForMuscleFromHistory(m,exercises,workouts,sets)}));
-  const mostRecovered = recoveryScoresHome.sort((a,b)=>b.rec.score-a.rec.score)[0];
-  const leastRecovered = [...recoveryScoresHome].sort((a,b)=>a.rec.score-b.rec.score)[0];
+  const weekNutrition = useMemo(()=>{const nutritionLogsHome = loadNutritionLogs(); return Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=d.toISOString().slice(0,10); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});},[]);
+  const waterGoalDaysHome = useMemo(()=>weekNutrition.filter(n=>n.waterMl>=2000).length,[weekNutrition]);
+  const proteinGoalDaysHome = useMemo(()=>weekNutrition.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length,[weekNutrition]);
+  const recoveryScoresHome = useMemo(()=>recoveryMuscles.map(m=>({m,rec:recoveryForMuscleFromHistory(m,exercises,workouts,sets)})),[recoveryMuscles,exercises,workouts,sets]);
+  const mostRecovered = useMemo(()=>[...recoveryScoresHome].sort((a,b)=>b.rec.score-a.rec.score)[0],[recoveryScoresHome]);
+  const leastRecovered = useMemo(()=>[...recoveryScoresHome].sort((a,b)=>a.rec.score-b.rec.score)[0],[recoveryScoresHome]);
 
   return <section className="homeV12">
     <FeatureHelp title="About LiftLog"><p>Start workouts, track machines, monitor recovery, and review progress without needing to understand every feature first.</p></FeatureHelp>
@@ -1585,15 +1585,15 @@ function HomePage({data}:any){
         </div>
         <div className="heroBadge">🔥</div>
       </div>
-      <button className="primary glowBtn" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? `Start ${scheduledRoutine?.name || 'Today\'s Workout'}` : 'Start Workout'}</button>
+      <button className="primary glowBtn" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? `Start today\'s ${scheduledRoutine?.name || 'workout'}` : 'Choose / Start Workout'}</button>
     </Card>
 
     <div className="homeWeeklyCards">
       <Card cls="continueRoutineCard">
-        <span className="eyebrow">CONTINUE LAST ROUTINE</span>
+        <span className="eyebrow">QUICK START ROUTINE</span>
         <h3>{lastRoutine?.name || 'Start training'}</h3>
-        <p className="muted">{lastWorkout ? `Last completed ${lastWorkout.date}` : 'Create or choose a routine to begin.'}</p>
-        <button className="primary" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? 'Start Scheduled' : 'Start'}</button>
+        <p className="muted">{todayPlan?.routineId ? 'Same scheduled workout shortcut as above.' : (lastWorkout ? `Last completed ${lastWorkout.date}` : 'Start your suggested routine quickly.')}</p>
+        <button className="primary" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? 'Start Today\'s Plan' : 'Open Workout'}</button>
       </Card>
       <Card cls="recoveryInsightCard">
         <span className="eyebrow">RECOVERY INSIGHTS</span>
@@ -2453,6 +2453,14 @@ function CalendarPage({data}:any){
     await db.plannedWorkouts.update(p.id,{date:d.toISOString().slice(0,10)});
     refresh();
   }
+  async function deleteCompletedWorkout(w:Workout){
+    if(!w.id) return;
+    if(!confirm(`Delete completed workout "${w.title}"? This removes its logged sets from history too.`)) return;
+    await db.sets.where('workoutId').equals(w.id).delete();
+    try{ await db.replacements.where('workoutId').equals(w.id).delete(); }catch{}
+    await db.workouts.delete(w.id);
+    refresh();
+  }
 
   return <section>
     <FeatureHelp title="About Calendar"><p>Plan workouts or rest days for the week. A rest day replaces workout plans on that date so your calendar stays clean.</p></FeatureHelp>
@@ -2483,7 +2491,7 @@ function CalendarPage({data}:any){
             const r=routines.find((x:Routine)=>x.id===p.routineId); 
             return <div className="plannedEventV15" style={{borderColor:r?.color||'#0f172a', color:r?.color||'#0f172a'}} key={p.id}><em>Planned</em><strong>{r?.name||'Routine'}</strong><div className="planMoveBtns mobileMoveBtns">{p.routineId&&<button className="startPlannedBtn" onClick={()=>startRoutineWorkout(p.routineId!, day)}>Start</button>}<button onClick={()=>movePlan(p,-1)}>Move ←</button><button onClick={()=>movePlan(p,1)}>Move →</button><button onClick={()=>removePlan(p.id)}>Remove</button></div></div> 
           })}
-          {ws.map((w:Workout)=>{ const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="completedEventV15" style={{background:r?.color||'#0f172a'}} key={w.id}><em>Completed</em><strong>{r?.name||w.title}</strong><span>{ss.length} sets · {fmtVol(vol)}</span></div> })}
+          {ws.map((w:Workout)=>{ const r=routines.find((x:Routine)=>x.id===w.routineId); const ss=sets.filter((s:WorkoutSet)=>s.workoutId===w.id); const vol=ss.reduce((a:number,s:WorkoutSet)=>a+volumeKg(s),0); return <div className="completedEventV15 completedEventEditable" style={{background:r?.color||'#0f172a'}} key={w.id}><div><em>Completed</em><strong>{r?.name||w.title}</strong><span>{ss.length} sets · {fmtVol(vol)}</span></div><button className="completedDeleteBtn" onClick={()=>deleteCompletedWorkout(w)}>Delete</button></div> })}
         </Card>
       })}
     </div>
@@ -3012,8 +3020,9 @@ function HistoryPage({data}:any){
   const [editMealNotes,setEditMealNotes]=useState('');
   const [nutritionLogs,setNutritionLogs]=useState<Record<string,DailyNutritionLog>>(()=>loadNutritionLogs());
   const [filter,setFilter]=useState<'all'|'workouts'|'nutrition'|'prs'|'rest'>('all');
-  const completed = workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt));
-  const selected = completed.find((w:Workout)=>w.id===selectedId);
+  const [visibleDays,setVisibleDays]=useState(18);
+  const completed = useMemo(()=>workouts.filter((w:Workout)=>w.endedAt).sort((a:Workout,b:Workout)=>b.startedAt.localeCompare(a.startedAt)),[workouts]);
+  const selected = useMemo(()=>completed.find((w:Workout)=>w.id===selectedId),[completed,selectedId]);
 
   async function deleteSet(id:number|undefined){
     if(!id || !confirm('Delete this set?')) return;
@@ -3077,20 +3086,22 @@ function HistoryPage({data}:any){
     </section>
   }
 
-  const dayKeys = Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs), ...plannedWorkouts.map((p:PlannedWorkout)=>p.date)])).sort((a,b)=>b.localeCompare(a)).slice(0,30);
-  const recentDate = (d:string)=>new Date(d)>=new Date(Date.now()-7*86400000);
-  const workouts7 = completed.filter((w:Workout)=>recentDate(w.date));
-  const totalVol7 = workouts7.reduce((a,w)=>a+workoutVolume(w,sets),0);
-  const nutritionEntries7 = Object.entries(nutritionLogs).filter(([d])=>recentDate(d)).map(([d,n])=>normaliseNutritionDay(n));
+  const allDayKeys = useMemo(()=>Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs), ...plannedWorkouts.map((p:PlannedWorkout)=>p.date)])).sort((a,b)=>b.localeCompare(a)),[completed,nutritionLogs,plannedWorkouts]);
+  const dayKeys = useMemo(()=>allDayKeys.slice(0,visibleDays),[allDayKeys,visibleDays]);
+  const recentCutoff = useMemo(()=>Date.now()-7*86400000,[]);
+  const recentDate = (d:string)=>new Date(d).getTime()>=recentCutoff;
+  const workouts7 = useMemo(()=>completed.filter((w:Workout)=>recentDate(w.date)),[completed,recentCutoff]);
+  const totalVol7 = useMemo(()=>workouts7.reduce((a,w)=>a+workoutVolume(w,sets),0),[workouts7,sets]);
+  const nutritionEntries7 = useMemo(()=>Object.entries(nutritionLogs).filter(([d])=>recentDate(d)).map(([d,n])=>normaliseNutritionDay(n)),[nutritionLogs,recentCutoff]);
   const nutritionDays7 = nutritionEntries7.length;
-  const meals7 = nutritionEntries7.reduce((a,n)=>a+((n.meals||[]).filter((m:MealLog)=>m.type!=='Snack').length),0);
-  const waterGoalDays = nutritionEntries7.filter(n=>n.waterMl>=2000).length;
-  const proteinGoalDays = nutritionEntries7.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length;
-  const offTrackDays = nutritionEntries7.filter(n=>n.meals.some(m=>m.quality==='Off-track')).length;
-  const prCount7 = sets.filter((s:WorkoutSet)=>recentDate(s.createdAt.slice(0,10))).filter((s:WorkoutSet)=>{
+  const meals7 = useMemo(()=>nutritionEntries7.reduce((a,n)=>a+((n.meals||[]).filter((m:MealLog)=>m.type!=='Snack').length),0),[nutritionEntries7]);
+  const waterGoalDays = useMemo(()=>nutritionEntries7.filter(n=>n.waterMl>=2000).length,[nutritionEntries7]);
+  const proteinGoalDays = useMemo(()=>nutritionEntries7.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length,[nutritionEntries7]);
+  const offTrackDays = useMemo(()=>nutritionEntries7.filter(n=>n.meals.some(m=>m.quality==='Off-track')).length,[nutritionEntries7]);
+  const prCount7 = useMemo(()=>sets.filter((s:WorkoutSet)=>recentDate(s.createdAt.slice(0,10))).filter((s:WorkoutSet)=>{
     const prior=sets.filter((x:WorkoutSet)=>x.exerciseId===s.exerciseId&&x.createdAt<s.createdAt);
     return prior.length && e1rm(kgValue(s),s.reps)>Math.max(...prior.map((x:WorkoutSet)=>e1rm(kgValue(x),x.reps)));
-  }).length;
+  }).length,[sets,recentCutoff]);
 
   return <section>
     <FeatureHelp title="About History"><p>Review workouts and nutrition as a timeline. Tap a workout to edit sets; tap a meal chip to edit it. Use filters to focus on workouts, nutrition, PRs or rest days.</p></FeatureHelp>
@@ -3209,7 +3220,9 @@ class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasErro
               </div>
               <small>{String(this.state.error?.message || this.state.error || 'Unknown error')}</small>
             </div>
-          </section>
+          
+    {dayKeys.length < allDayKeys.length && <button className="secondary loadMoreHistory" onClick={()=>setVisibleDays(v=>v+18)}>Load more history</button>}
+  </section>
         </main>
       </div>;
     }

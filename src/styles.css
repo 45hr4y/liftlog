@@ -2796,3 +2796,45 @@ body[data-theme="dark"] .editableTagList button{
     border-radius:24px;
   }
 }
+
+
+/* LiftLog v51 Calendar Delete + Clearer Home CTAs */
+.completedEventEditable{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.completedEventEditable > div{
+  display:grid;
+  gap:2px;
+}
+.completedDeleteBtn{
+  border-radius:999px;
+  padding:7px 10px;
+  background:rgba(255,255,255,.18);
+  color:#fff;
+  font-size:11px;
+  font-weight:950;
+  border:1px solid rgba(255,255,255,.25);
+}
+.completedDeleteBtn:hover{
+  background:rgba(255,255,255,.28);
+}
+@media(max-width:720px){
+  .completedEventEditable{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .completedDeleteBtn{
+    min-height:38px;
+  }
+}
+
+
+/* LiftLog v52 Performance Pass */
+.loadMoreHistory{
+  width:100%;
+  margin:14px 0 90px;
+  min-height:44px;
+}
