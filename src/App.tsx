@@ -1879,7 +1879,7 @@ function SubtypesPage({data}:any){
   const {exercises,subtypes,refresh}=data;
   const [exerciseId,setExerciseId]=useState<number|undefined>(); const [name,setName]=useState(''); const [unit,setUnit]=useState<Unit>('kg'); const [photo,setPhoto]=useState<Blob|undefined>(); const [tagInput,setTagInput]=useState(''); const [tags,setTags]=useState<string[]>([]);
   const [settings,setSettings]=useState<MachineSetting[]>([]); const [label,setLabel]=useState(''); const [type,setType]=useState<SettingType>('dropdown'); const [opts,setOpts]=useState('1,2,3,4,5');
-  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine'); const [savedMsg,setSavedMsg]=useState(''); const [photoModal,setPhotoModal]=useState<MachinePhotoDetails|undefined>();
+  const [newExName,setNewExName]=useState(''); const [newExMuscle,setNewExMuscle]=useState('Side Delt'); const [newExSecondary,setNewExSecondary]=useState<string[]>([]); const [newExEquip,setNewExEquip]=useState('Machine'); const [savedMsg,setSavedMsg]=useState(''); const [photoModal,setPhotoModal]=useState<MachinePhotoDetails|undefined>(); const [editingSubtype,setEditingSubtype]=useState<Subtype|undefined>(); const [editName,setEditName]=useState(''); const [editUnit,setEditUnit]=useState<Unit>('kg'); const [editPhoto,setEditPhoto]=useState<Blob|undefined>(); const [editTags,setEditTags]=useState<string[]>([]); const [editTagInput,setEditTagInput]=useState('');
 
   function addSetting(){ if(!label.trim())return; setSettings([...settings,{id:crypto.randomUUID(),label:label.trim(),type,options:type==='dropdown'?opts.split(',').map(x=>x.trim()):undefined,defaultValue:type==='checkbox'?false:''}]); setLabel(''); }
   function addTag(){ const t=tagInput.trim(); if(!t)return; setTags([...tags,t]); setTagInput(''); }
@@ -1895,6 +1895,28 @@ function SubtypesPage({data}:any){
     refresh(); 
   }
   async function del(s:Subtype){ if(!confirm('Delete this subtype? Past set logs remain.'))return; await db.subtypes.delete(s.id!); const rs=await db.routineExercises.where('subtypeId').equals(s.id!).toArray(); for(const r of rs) await db.routineExercises.update(r.id!,{subtypeId:undefined}); refresh(); }
+  function startEditSubtype(s:Subtype){
+    setEditingSubtype(s);
+    setEditName(s.name);
+    setEditUnit(s.defaultUnit);
+    setEditPhoto(s.photo);
+    setEditTags([...(s.tags||[])]);
+    setEditTagInput('');
+  }
+  function addEditTag(){
+    const t=editTagInput.trim();
+    if(!t) return;
+    setEditTags([...editTags,t]);
+    setEditTagInput('');
+  }
+  async function saveEditSubtype(){
+    if(!editingSubtype?.id || !editName.trim()) return alert('Machine name is required');
+    await db.subtypes.update(editingSubtype.id,{name:editName.trim(),defaultUnit:editUnit,photo:editPhoto,settings:[],tags:editTags});
+    setSavedMsg(`Updated ${editName.trim()}`);
+    setEditingSubtype(undefined);
+    setTimeout(()=>setSavedMsg(''),1800);
+    refresh();
+  }
   return <section>
     <Card cls="builderHero"><span className="eyebrow">Machine Builder</span><h2>Machines belong to exercises</h2><p className="muted">Search for an exercise, or create one here first, then save the exact machine/subtype with its own unit and settings.</p></Card>
     <Card cls="builderCard">
@@ -1913,7 +1935,26 @@ function SubtypesPage({data}:any){
       </div>{photo&&<img className="preview" src={blobUrl(photo)}/>}
       <h4>Quick machine tags</h4><div className="tagComposer"><input placeholder="Tag e.g. Seat 4, Back pad 3, Slow eccentric" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}/><button className="secondary" onClick={addTag}>Add tag</button></div><Pills>{tags.map(t=><span key={t}>#{t}</span>)}</Pills><button className="primary" onClick={add}>Save Machine</button>
     </Card>
-    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId);return <Card key={s.id} cls="machine machineCardV48"><button className="machineCardPhoto" onClick={()=>setPhotoModal({title:s.name,subtitle:ex?.name,photo:s.photo,tags:s.tags,last:undefined,best:undefined})}>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}<span>View Photo</span></button><div><div className="row"><h3>{s.name}</h3><button className="trash" onClick={()=>del(s)}><Trash2/></button></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<div className="machineCardTags"><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}</div></div></Card>})}
+    {subtypes.map((s:Subtype)=>{const ex=exercises.find((e:Exercise)=>e.id===s.exerciseId); const editing=editingSubtype?.id===s.id; return <Card key={s.id} cls={editing?'machineEditCard':'machine machineCardV48'}>{editing?
+      <div className="machineEditPanel">
+        <div className="row"><div><span className="eyebrow">Edit Machine</span><h3>{s.name}</h3></div><button className="secondary mini" onClick={()=>setEditingSubtype(undefined)}>Cancel</button></div>
+        <label>Machine name<input value={editName} onChange={e=>setEditName(e.target.value)} placeholder="Machine name"/></label>
+        <label>Default unit<select value={editUnit} onChange={e=>setEditUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></label>
+        <div className="singlePhotoPicker">
+          <label className="upload"><ImagePlus/> {editPhoto?'Change Machine Photo':'Add Machine Photo'}<input hidden type="file" accept="image/*" onChange={async e=>setEditPhoto(await compressImageFile(e.target.files?.[0]))}/></label>
+          {editPhoto&&<button className="secondary mini" onClick={()=>setEditPhoto(undefined)}>Remove photo</button>}
+        </div>
+        {editPhoto&&<img className="preview" src={blobUrl(editPhoto)}/>}
+        <h4>Tags</h4>
+        <div className="tagComposer"><input value={editTagInput} onChange={e=>setEditTagInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addEditTag();}}} placeholder="Tag e.g. Seat 4"/><button className="secondary" onClick={addEditTag}>Add tag</button></div>
+        <div className="editableTagList">{editTags.map((t:string,i:number)=><span key={`${t}-${i}`}>#{t}<button onClick={()=>setEditTags(editTags.filter((_,idx)=>idx!==i))}>×</button></span>)}</div>
+        <button className="primary" onClick={saveEditSubtype}>Save changes</button>
+      </div>
+      :
+      <>
+        <button className="machineCardPhoto" onClick={()=>setPhotoModal({title:s.name,subtitle:ex?.name,photo:s.photo,tags:s.tags,last:undefined,best:undefined})}>{s.photo?<img src={blobUrl(s.photo)}/>:<div className="placeholder">No photo</div>}<span>View Photo</span></button>
+        <div><div className="row"><h3>{s.name}</h3><div className="machineCardActions"><button className="smallAction" onClick={()=>startEditSubtype(s)}>Edit</button><button className="trash" onClick={()=>del(s)}><Trash2/></button></div></div><p className="muted">{ex?.name}</p>{ex&&<MusclePills ex={ex}/>}<div className="machineCardTags"><span>{s.defaultUnit}</span>{(s.tags||[]).map(t=><span key={t}>#{t}</span>)}</div></div>
+      </>}</Card>})}
     {photoModal&&<MachinePhotoModal details={photoModal} onClose={()=>setPhotoModal(undefined)}/>}
   </section>
 }

@@ -2735,3 +2735,64 @@ body[data-theme="dark"] .machineModalTags span{
     min-height:42px!important;
   }
 }
+
+
+/* LiftLog v50 Machine Edit Polish */
+.machineCardActions{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.machineEditCard{
+  border:1px solid #bfdbfe;
+  background:linear-gradient(135deg,#eff6ff,#ffffff);
+}
+.machineEditPanel{
+  display:grid;
+  gap:10px;
+}
+.editableTagList{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:4px 0 8px;
+}
+.editableTagList span{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-radius:999px;
+  padding:7px 9px;
+  background:#fef3c7;
+  color:#92400e;
+  font-size:12px;
+  font-weight:950;
+}
+.editableTagList button{
+  width:22px;
+  height:22px;
+  border-radius:999px;
+  background:#fff7ed;
+  color:#9a3412;
+  font-weight:950;
+}
+body[data-theme="dark"] .machineEditCard{
+  background:#020617;
+  border-color:#1e3a8a;
+}
+body[data-theme="dark"] .editableTagList span{
+  background:#78350f;
+  color:#fde68a;
+}
+body[data-theme="dark"] .editableTagList button{
+  background:#451a03;
+  color:#fed7aa;
+}
+@media(max-width:720px){
+  .machineCardActions{
+    margin-top:6px;
+  }
+  .machineEditCard{
+    border-radius:24px;
+  }
+}
