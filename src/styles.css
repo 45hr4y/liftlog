@@ -3012,3 +3012,45 @@ body[data-theme="dark"] .smartLogActions button{
     min-height:44px!important;
   }
 }
+
+
+/* LiftLog v60 Optional Nutrition Supplements */
+.supplementSettingsCard{
+  border:1px solid #ddd6fe;
+  background:linear-gradient(135deg,#f5f3ff,#ffffff);
+}
+.supplementSettingsGrid,
+.supplementToggleGrid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:10px 0;
+}
+.supplementSettingsGrid button,
+.supplementToggleGrid button{
+  border-radius:999px;
+  padding:9px 12px;
+  font-size:13px;
+  font-weight:950;
+}
+.supplementCustom{
+  margin-top:10px;
+}
+.supplementMetric{
+  border-color:#ddd6fe!important;
+}
+body[data-theme="dark"] .supplementSettingsCard{
+  background:#020617;
+  border-color:#5b21b6;
+}
+@media(max-width:720px){
+  .supplementToggleGrid,
+  .supplementSettingsGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .supplementToggleGrid button,
+  .supplementSettingsGrid button{
+    min-height:42px;
+  }
+}

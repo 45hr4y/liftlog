@@ -2792,14 +2792,32 @@ function SpiderChart({values}:{values:Record<string,number>}) {
 type MealQuality = 'Great' | 'Okay' | 'Off-track';
 type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other';
 type MealLog = { id:string; date:string; time:string; type:MealType; title:string; notes?:string; quality:MealQuality; proteinIncluded:boolean; fruitVegIncluded:boolean };
-type DailyNutritionLog = { date:string; waterMl:number; creatineTaken:boolean; creatineGrams:number; caffeineMg:number; caffeineLastAt?:string; proteinServings?:number; proteinTarget?:number; meals:MealLog[]; reflection?:string };
+type DailyNutritionLog = { date:string; waterMl:number; creatineTaken:boolean; creatineGrams:number; caffeineMg:number; caffeineLastAt?:string; proteinServings?:number; proteinTarget?:number; meals:MealLog[]; supplements?:Record<string,boolean>; reflection?:string };
+
+
+const SUPPLEMENT_SETTINGS_KEY = 'liftlog-enabled-nutrition-supplements-v60';
+const DEFAULT_SUPPLEMENT_OPTIONS = ['Iron','Magnesium','Vitamin D','Omega-3','B12','Collagen','Electrolytes'];
+function loadEnabledSupplements(): string[] {
+  try {
+    const raw = localStorage.getItem(SUPPLEMENT_SETTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x:any)=>typeof x==='string' && x.trim()).map((x:string)=>x.trim()) : [];
+  } catch { return []; }
+}
+function saveEnabledSupplements(items:string[]) {
+  const clean = Array.from(new Set(items.map(x=>x.trim()).filter(Boolean)));
+  localStorage.setItem(SUPPLEMENT_SETTINGS_KEY, JSON.stringify(clean));
+}
+function supplementKey(name:string) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+}
 
 const NUTRITION_STORAGE_KEY = 'liftlog-nutrition-accountability-v1';
 const nutritionToday = () => today();
 const nutritionUid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now()+Math.random()));
 
 function emptyNutritionDay(date:string): DailyNutritionLog {
-  return {date, waterMl:0, creatineTaken:false, creatineGrams:5, caffeineMg:0, meals:[], reflection:''};
+  return {date, waterMl:0, creatineTaken:false, creatineGrams:5, caffeineMg:0, meals:[], supplements:{}, reflection:''};
 }
 function loadNutritionLogs(): Record<string, DailyNutritionLog> {
   try { const raw = localStorage.getItem(NUTRITION_STORAGE_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
@@ -2843,21 +2861,24 @@ function normaliseNutritionDay(day: DailyNutritionLog): DailyNutritionLog {
     ...day,
     proteinServings: day.proteinServings ?? day.meals.filter(m=>m.proteinIncluded).length,
     proteinTarget: day.proteinTarget ?? 3,
-    caffeineLastAt: day.caffeineLastAt ?? ''
+    caffeineLastAt: day.caffeineLastAt ?? '',
+    supplements: day.supplements ?? {}
   };
 }
 function NutritionPage(){
   const [logs,setLogs]=useState<Record<string, DailyNutritionLog>>({});
   const [date,setDate]=useState(nutritionToday());
+  const [enabledSupplements,setEnabledSupplements]=useState<string[]>(()=>loadEnabledSupplements());
   const rawDay = logs[date] || emptyNutritionDay(date);
   const day = normaliseNutritionDay(rawDay);
   const [mealDraft,setMealDraft]=useState({type:'Other' as MealType,title:'',notes:'',quality:'Okay' as MealQuality,proteinIncluded:false,fruitVegIncluded:false});
 
-  useEffect(()=>{setLogs(loadNutritionLogs())},[]);
+  useEffect(()=>{setLogs(loadNutritionLogs()); setEnabledSupplements(loadEnabledSupplements());},[]);
   function updateDay(next:DailyNutritionLog){const updated={...logs,[date]:normaliseNutritionDay(next)}; setLogs(updated); saveNutritionLogs(updated);}
   function addWater(amount:number){updateDay({...day,waterMl:Math.max(0,day.waterMl+amount)});}
   function addCaffeine(amount:number){updateDay({...day,caffeineMg:Math.max(0,day.caffeineMg+amount),caffeineLastAt:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});}
   function toggleCreatine(){updateDay({...day,creatineTaken:!day.creatineTaken});}
+  function toggleSupplement(name:string){const key=supplementKey(name); updateDay({...day,supplements:{...(day.supplements||{}),[key]:!(day.supplements||{})[key]}});}
   function addProtein(amount:number){updateDay({...day,proteinServings:Math.max(0,(day.proteinServings||0)+amount)});}
   function addMeal(){
     if(!mealDraft.title.trim()) return;
@@ -2871,7 +2892,9 @@ function NutritionPage(){
   }
 
   const score=nutritionScoreV19(day);
-  const habits=nutritionHabitsV20(day);
+  const baseHabits=nutritionHabitsV20(day);
+  const supplementHabits=enabledSupplements.map(name=>{const key=supplementKey(name); const done=!!(day.supplements||{})[key]; return {key:`supp-${key}`,label:name,done,detail:done?'Taken':'Pending'};});
+  const habits=[...baseHabits,...supplementHabits];
   const completedHabits=habits.filter(h=>h.done).length;
   const protein = day.proteinServings || 0;
   const proteinTarget = day.proteinTarget || 3;
@@ -2896,7 +2919,7 @@ function NutritionPage(){
     <Card cls="hero nutritionHeroPro">
       <div className="nutritionHeroGrid">
         <div><div className="eyebrow lightText">NUTRITION ACCOUNTABILITY</div><h2>Fuel Dashboard</h2><p>Track water, creatine, caffeine, protein and meals without calorie obsession.</p></div>
-        <div className="nutritionOrb"><span>{completedHabits}/5</span><em>Habits</em></div>
+        <div className="nutritionOrb"><span>{completedHabits}/{habits.length}</span><em>Habits</em></div>
       </div>
     </Card>
 
@@ -2937,6 +2960,7 @@ function NutritionPage(){
       <Card cls="nutritionMetric creatine"><div className="metricIcon">⚡</div><span>Creatine</span><strong>{day.creatineTaken?'Taken':'Pending'}</strong><p>{creatineStreak} day streak · {day.creatineGrams}g default</p><button className={day.creatineTaken?'done-button':'primary'} onClick={toggleCreatine}>{day.creatineTaken?'Creatine taken ✓':'Mark taken'}</button></Card>
       <Card cls="nutritionMetric caffeine"><div className="metricIcon">☕</div><span>Caffeine</span><strong>{day.caffeineMg} mg</strong><p>{day.caffeineLastAt?`Last logged ${day.caffeineLastAt}`:'Soft limit: 400 mg/day'}</p><div className="button-row"><button onClick={()=>addCaffeine(80)}>+80</button><button onClick={()=>addCaffeine(150)}>+150</button><button onClick={()=>addCaffeine(200)}>+200</button><button onClick={()=>addCaffeine(-80)}>-80</button></div>{day.caffeineMg>400&&<p className="warningText">High caffeine day. Consider stopping here.</p>}</Card>
       <Card cls="nutritionMetric protein"><div className="metricIcon">🥩</div><span>Protein servings</span><strong>{protein}/{proteinTarget}</strong><p>Simple serving target, not macro tracking.</p><div className="button-row"><button onClick={()=>addProtein(1)}>+1</button><button onClick={()=>addProtein(-1)}>-1</button><button onClick={()=>updateDay({...day,proteinTarget:proteinTarget+1})}>Target +</button><button onClick={()=>updateDay({...day,proteinTarget:Math.max(1,proteinTarget-1)})}>Target -</button></div></Card>
+      {enabledSupplements.length>0&&<Card cls="nutritionMetric supplementMetric"><div className="metricIcon">💊</div><span>Supplements</span><strong>{enabledSupplements.filter(name=>(day.supplements||{})[supplementKey(name)]).length}/{enabledSupplements.length}</strong><p>Only supplements enabled in Settings appear here.</p><div className="supplementToggleGrid">{enabledSupplements.map(name=>{const key=supplementKey(name); const taken=!!(day.supplements||{})[key]; return <button key={key} className={taken?'done-button':'secondary'} onClick={()=>toggleSupplement(name)}>{taken?'✓ ':''}{name}</button>})}</div></Card>}
     </div>
 
     <Card cls="nutritionQuickAdd">
@@ -2944,6 +2968,7 @@ function NutritionPage(){
       <button onClick={toggleCreatine}>{day.creatineTaken?'⚡ Taken':'⚡ Creatine'}</button>
       <button onClick={()=>addProtein(1)}>🥩 Protein</button>
       <button onClick={()=>addCaffeine(80)}>☕ +80 mg</button>
+      {enabledSupplements.map(name=>{const key=supplementKey(name); const taken=!!(day.supplements||{})[key]; return <button key={key} onClick={()=>toggleSupplement(name)}>{taken?'✓':'💊'} {name}</button>})}
     </Card>
 
     <Card cls="mealPanelPro">
@@ -2992,7 +3017,10 @@ function MorePage({data}:any){
   </section>
 }
 
-function SettingsPage({data}:any){const {settings,refresh}=data; 
+function SettingsPage({data}:any){const {settings,refresh}=data; const [enabledSupplements,setEnabledSupplements]=useState<string[]>(()=>loadEnabledSupplements()); const [customSupplement,setCustomSupplement]=useState('');
+  function toggleSupplementSetting(name:string){const next=enabledSupplements.includes(name)?enabledSupplements.filter(x=>x!==name):[...enabledSupplements,name]; setEnabledSupplements(next); saveEnabledSupplements(next);}
+  function addCustomSupplement(){const name=customSupplement.trim(); if(!name) return; if(!enabledSupplements.includes(name)){const next=[...enabledSupplements,name]; setEnabledSupplements(next); saveEnabledSupplements(next);} setCustomSupplement('');}
+  
   async function exportData(){
     const payload = await buildPhotoSafeBackupPayload();
     const a=document.createElement('a');
@@ -3023,6 +3051,7 @@ function SettingsPage({data}:any){const {settings,refresh}=data;
   return <section>
     <Card cls="timezoneCard"><h3>Timezone</h3><p><strong>{localTimeZone()}</strong></p><p className="muted">LiftLog now uses your device timezone for today, calendar scheduling, nutrition logs, recovery and weekly stats.</p></Card>
     <Card><h3>Default display unit</h3><select value={settings.unit} onChange={async e=>{await db.settings.put({...settings,unit:e.target.value as Unit});refresh()}}><option value="kg">kg</option><option value="lb">lb</option></select><p className="muted">Machine subtypes still keep their own default units.</p></Card>
+    <Card cls="supplementSettingsCard"><h3>Nutrition supplements</h3><p className="muted">Choose optional supplements to show in Nutrition. If none are enabled, they stay completely hidden from the Nutrition tab.</p><div className="supplementSettingsGrid">{DEFAULT_SUPPLEMENT_OPTIONS.map(name=><button key={name} className={enabledSupplements.includes(name)?'done-button':'secondary'} onClick={()=>toggleSupplementSetting(name)}>{enabledSupplements.includes(name)?'✓ ':''}{name}</button>)}</div><div className="tagComposer supplementCustom"><input value={customSupplement} onChange={e=>setCustomSupplement(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addCustomSupplement();}}} placeholder="Add custom supplement"/><button className="secondary" onClick={addCustomSupplement}>Add</button></div>{enabledSupplements.length>0&&<div className="editableTagList">{enabledSupplements.map(name=><span key={name}>{name}<button onClick={()=>toggleSupplementSetting(name)}>×</button></span>)}</div>}</Card>
     <Card><h3>Theme</h3><button className="secondary" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'});refresh()}}>{settings.theme==='light'?<Moon/>:<Sun/>} Toggle theme</button></Card>
     <Card cls="photoSafeBackupCard"><h3>Photo-safe backup</h3><p className="muted">This uses the same photo-safe format as the Backups page. Backups is now the main place to export/import/restore.</p><button className="secondary" onClick={exportData}>Export Photo-Safe JSON</button><label className="upload">Import Photo-Safe JSON<input hidden type="file" accept="application/json" onChange={e=>importData(e.target.files?.[0])}/></label><button className="danger" onClick={clear}>Delete all local data</button></Card>
   </section>
