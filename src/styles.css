@@ -2984,3 +2984,31 @@ body[data-theme="dark"] .machineMemoryHint{
 body[data-theme="dark"] .machineMemoryHint strong{
   color:#93c5fd;
 }
+
+
+/* LiftLog v59 Smart Workout Flow */
+.smartLogActions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:10px 0;
+}
+.smartLogActions button{
+  margin:0!important;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+}
+body[data-theme="dark"] .smartLogActions button{
+  background:#020617;
+  border-color:#1e3a8a;
+  color:#bfdbfe;
+}
+@media(max-width:720px){
+  .smartLogActions{
+    grid-template-columns:1fr;
+  }
+  .smartLogActions button{
+    min-height:44px!important;
+  }
+}

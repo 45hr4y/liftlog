@@ -1281,6 +1281,14 @@ function lastSessionsForExercise(exerciseId: number | undefined, workouts: Worko
   return byWorkout;
 }
 
+
+function nextSetNumberFor(item:RoutineExercise, todaySets:WorkoutSet[]){
+  for(let i=1;i<=Math.max(item.sets,1);i++){
+    if(!todaySets.some((s:WorkoutSet)=>s.setNumber===i)) return i;
+  }
+  return todaySets.length + 1;
+}
+
 function previousSetForNumber(exerciseId:number, subtypeId:number|undefined, setNumber:number, workout:Workout, workouts:Workout[], sets:WorkoutSet[]) {
   const prev = previousSets(exerciseId, subtypeId, workout, workouts, sets);
   return prev.find(s => s.setNumber === setNumber);
@@ -1323,7 +1331,8 @@ export default function App() {
   const activeWorkout = workouts.find(w=>w.id===activeWorkoutId);
   async function startRoutineWorkout(routineId:number, date=today()){
     const r=routines.find((x:Routine)=>x.id===routineId);
-    const id=await db.workouts.add({routineId,title:r?.name||'Workout',date,startedAt:now()});
+    const existing = workouts.find((w:Workout)=>w.routineId===routineId && w.date===date && !w.endedAt);
+    const id = existing?.id || await db.workouts.add({routineId,title:r?.name||'Workout',date,startedAt:now()});
     setActiveWorkoutId(id as number);
     setPage('log');
     await refresh();
@@ -2456,6 +2465,30 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
     if(wi) wi.value=String(w);
     if(ri && r) ri.value=String(r);
   }
+  function fillRir(n:number,rir?:number){
+    const el=document.getElementById(`rir-${item.id}-${n}`) as HTMLInputElement|null;
+    if(el && rir!==undefined) el.value=String(rir);
+  }
+  function repeatPreviousSet(){
+    const sorted=[...todaySets].sort((a:WorkoutSet,b:WorkoutSet)=>b.setNumber-a.setNumber);
+    const last = sorted[0] || prev[0];
+    if(!last) return alert('No previous set found yet.');
+    const n = nextSetNumberFor(item,todaySets);
+    fillSet(n, Math.round(convert(last.weight,last.unit,unit)*10)/10, last.reps);
+    fillRir(n,last.rir);
+    setExtra(Math.max(extra, n-item.sets));
+    haptic(8);
+  }
+  function loadPreviousSession(){
+    if(!prev.length) return alert('No previous session found for this exercise/machine.');
+    prev.forEach((s:WorkoutSet,i:number)=>{
+      const n=i+1;
+      fillSet(n, Math.round(convert(s.weight,s.unit,unit)*10)/10, s.reps);
+      fillRir(n,s.rir);
+    });
+    setExtra(Math.max(extra, prev.length-item.sets));
+    haptic([10,30,10]);
+  }
   async function applySwap(newExerciseId:number){
     if(!workout?.id || !item?.id || !originalEx?.id) return;
     const existing = replacement;
@@ -2513,6 +2546,10 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
       <summary><div className="loggerTitle"><span>{subtype?.photo?<img src={blobUrl(subtype.photo)}/>:<Dumbbell/>}</span><div><h3>{ex.name}</h3><p>{replacement?`Replaces ${originalEx?.name} today`:(subtype?.name||'No subtype selected')}</p></div></div></summary>
       {justCompleted&&<div className="completeBurst inlineCompleteBurst">✓ Exercise Complete</div>}
       {exerciseComplete&&<div className="compactCompleteRow">✓ {ex.name} · {todaySets.length} sets complete</div>}
+      <div className="smartLogActions">
+        <button className="secondary mini" onClick={repeatPreviousSet}>Repeat Previous Set</button>
+        <button className="secondary mini" onClick={loadPreviousSession}>Load Previous Session</button>
+      </div>
       <div className="swapPanel">
         <button className="secondary mini" onClick={()=>setSwapOpen(!swapOpen)}>Replace Exercise Today</button>
         {replacement&&<button className="secondary mini" onClick={clearSwap}>Use original</button>}
