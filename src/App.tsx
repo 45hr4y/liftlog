@@ -130,6 +130,27 @@ function backupSummary(payload:any){
   return `LiftLog backup ${payload?.version?`v${payload.version}`:'legacy'}\nExported: ${payload?.exportedAt || 'Unknown'}\nTimezone: ${payload?.timezone || 'Unknown'}\nExercises: ${c.exercises ?? payload?.exercises?.length ?? 0}\nMachines: ${c.subtypes ?? payload?.subtypes?.length ?? 0}\nPhotos: ${photos}\nWorkouts: ${c.workouts ?? payload?.workouts?.length ?? 0}\nSets: ${c.sets ?? payload?.sets?.length ?? 0}\n\nImport this backup?`;
 }
 
+
+function machineMemoryKey(exerciseId:number|string|undefined){
+  return `liftlog-last-machine-for-exercise-${exerciseId}`;
+}
+function rememberMachineForExercise(exerciseId:number|undefined, subtypeId:number|undefined){
+  if(!exerciseId || !subtypeId) return;
+  try{ localStorage.setItem(machineMemoryKey(exerciseId), String(subtypeId)); }catch{}
+}
+function rememberedMachineForExercise(exerciseId:number|undefined, subtypes:Subtype[]){
+  if(!exerciseId) return undefined;
+  try{
+    const id = Number(localStorage.getItem(machineMemoryKey(exerciseId)));
+    if(id) return subtypes.find((s:Subtype)=>s.id===id && s.exerciseId===exerciseId);
+  }catch{}
+  const matching = subtypes.filter((s:Subtype)=>s.exerciseId===exerciseId);
+  return matching.length===1 ? matching[0] : undefined;
+}
+function rememberedMachineIdForExercise(exerciseId:number|undefined, subtypes:Subtype[]){
+  return rememberedMachineForExercise(exerciseId, subtypes)?.id;
+}
+
 function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
 
 
@@ -2075,7 +2096,7 @@ function RoutinesPage({data}:any){
 
   async function create(){ if(!routineName.trim())return; const id=await db.routines.add({name:routineName.trim(),color:colour,createdAt:now()}); setRoutineId(id); setRoutineName(''); refresh(); }
   async function createExerciseAndSelect(){ try{ const id=await quickCreateExercise(newExName,newExMuscle,newExSecondary,newExEquip); setExerciseId(id); setNewExName(''); setNewExSecondary([]); refresh(); }catch(e:any){ alert(e.message || 'Could not create exercise'); } }
-  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,photo:newMachinePhoto,settings:[],tags:[],createdAt:now()}); setSubtypeId(id); setNewMachineName(''); setNewMachinePhoto(undefined); refresh(); }
+  async function createMachineForSelected(){ if(!exerciseId||!newMachineName.trim()) return alert('Choose exercise and enter machine name'); const id=await db.subtypes.add({exerciseId,name:newMachineName.trim(),defaultUnit:newMachineUnit,photo:newMachinePhoto,settings:[],tags:[],createdAt:now()}); setSubtypeId(id); rememberMachineForExercise(exerciseId,id as number); setNewMachineName(''); setNewMachinePhoto(undefined); refresh(); }
   async function moveRoutineItem(item:RoutineExercise, direction:-1|1){
     if(!routineId || !item.id) return;
     const sorted = routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a:RoutineExercise,b:RoutineExercise)=>a.order-b.order);
@@ -2096,7 +2117,7 @@ function RoutinesPage({data}:any){
     });
     refresh();
   }
-  async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
+  async function add(){ if(!routineId||!exerciseId)return alert('Choose routine and exercise'); const chosenSubtypeId=effectiveSubtypeId; if(chosenSubtypeId) rememberMachineForExercise(exerciseId,chosenSubtypeId); const current=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId); await db.routineExercises.add({routineId,exerciseId,subtypeId:chosenSubtypeId,order:current.length+1,sets:setsN,reps,rest,createdAt:now()}); refresh(); }
   async function delRoutine(){ if(!routineId||!confirm('Delete this routine template? Workout history remains.'))return; const items=await db.routineExercises.where('routineId').equals(routineId).toArray(); for(const i of items) await db.routineExercises.delete(i.id!); await db.routines.delete(routineId); setRoutineId(undefined); refresh(); }
   async function setFavouriteRoutine(id:number){
     await db.transaction('rw', db.routines, async()=>{
@@ -2107,6 +2128,8 @@ function RoutinesPage({data}:any){
   }
   const selectedRoutine = routines.find((r:Routine)=>r.id===routineId);
   const favouriteRoutine = routines.find((r:any)=>r.favourite || r.favorite || r.pinned);
+  const rememberedSubtypeForSelected = rememberedMachineForExercise(exerciseId, subtypes);
+  const effectiveSubtypeId = subtypeId || rememberedSubtypeForSelected?.id;
   const items=routineExercises.filter((r:RoutineExercise)=>r.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order);
   return <section>
     <FeatureHelp title="About Routine Builder"><p>Create routines, add exercises, save machine variants and reorder the plan. Use “Fix numbering” if you change the order a lot.</p></FeatureHelp>
@@ -2115,8 +2138,8 @@ function RoutinesPage({data}:any){
     <Card cls="builderHero"><span className="eyebrow">Routine Builder</span><h2>Build while you create</h2><p className="muted">Create a routine, create exercises, add machines and add them to the workout template from one place.</p></Card>
     <div className="builderSplit">
       <Card cls="builderCard"><h3>1. Routine</h3><input placeholder="Routine name" value={routineName} onChange={e=>setRoutineName(e.target.value)}/><div className="colourRow">{colours.map(c=><button key={c} className={colour===c?'colour activeColour':'colour'} style={{background:c}} onClick={()=>setColour(c)}/>)}</div><button className="primary" onClick={create}>Create Routine</button><select value={routineId??''} onChange={e=>setRoutineId(Number(e.target.value))}><option value="">Choose routine</option>{routines.filter((r:Routine)=>!r.archived).map((r:Routine)=><option key={r.id} value={r.id}>{(r.favourite||r.favorite||r.pinned)?'⭐ ':''}{r.name}</option>)}</select>{routineId&&<><div className="favouriteRoutinePanel"><div><span className="eyebrow">Home Fast Start</span><strong>{(selectedRoutine?.favourite||selectedRoutine?.favorite||selectedRoutine?.pinned)?'This is your favourite routine':'Set this as your favourite routine'}</strong><p className="muted">{favouriteRoutine ? `Current favourite: ${favouriteRoutine.name}` : 'Choose which routine the Home Fast Start button should launch.'}</p></div><button className={(selectedRoutine?.favourite||selectedRoutine?.favorite||selectedRoutine?.pinned)?'secondary':'primary'} onClick={()=>routineId&&setFavouriteRoutine(routineId)}>{(selectedRoutine?.favourite||selectedRoutine?.favorite||selectedRoutine?.pinned)?'Favourite set':'Set Favourite'}</button></div><div className="colourRow">{colours.map(c=><button key={c} className={(routines.find((r:Routine)=>r.id===routineId)?.color||'')===c?'colour activeColour':'colour'} style={{background:c}} onClick={async()=>{await db.routines.update(routineId,{color:c}); refresh();}}/>)}</div><div className="grid3"><button className="secondary mini" onClick={async()=>{ const r = routines.find((x:Routine)=>x.id===routineId); if(!r || !routineId) return; const newId = await db.routines.add({name:r.name + ' Copy', color:r.color, archived:false, favourite:false, favorite:false, pinned:false, createdAt:now()}); const items = routineExercises.filter((x:RoutineExercise)=>x.routineId===routineId).sort((a: RoutineExercise, b: RoutineExercise)=>a.order-b.order); for (const item of items) await db.routineExercises.add({...item, id:undefined, routineId:newId, createdAt:now()}); setRoutineId(newId); refresh(); }}>Duplicate</button><button className="secondary mini" onClick={startRenameRoutine}>Rename</button><button className="secondary mini" onClick={async()=>{ if(routineId){ await db.routines.update(routineId,{archived:true}); refresh(); }}}>Archive</button><button className="danger mini" onClick={delRoutine}>Delete</button></div></>}</Card>
-      <Card cls="builderCard"><h3>2. Exercise</h3><ExerciseSearchSelect exercises={exercises} value={exerciseId} onChange={(id)=>{setExerciseId(id);setSubtypeId(undefined)}} placeholder="Search exercise..."/><details className="inlineCreate"><summary>Create new exercise here</summary><div className="builderGrid"><input placeholder="New exercise name" value={newExName} onChange={e=>setNewExName(e.target.value)}/><select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={newExEquip} onChange={e=>setNewExEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div><SecondaryMusclePicker primary={newExMuscle} value={newExSecondary} onChange={setNewExSecondary}/><button className="secondary" onClick={createExerciseAndSelect}>Create and select</button></details></Card>
-      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={subtypeId??''} onChange={e=>setSubtypeId(e.target.value?Number(e.target.value):undefined)}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select><details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><div className="singlePhotoPicker routineMachinePhoto"><label className="upload"><ImagePlus/> {newMachinePhoto ? "Change Machine Photo" : "Add Machine Photo"}<input hidden type="file" accept="image/*" onChange={e=>setNewMachinePhoto(e.target.files?.[0])}/></label>{newMachinePhoto&&<button className="secondary mini" onClick={()=>setNewMachinePhoto(undefined)}>Remove photo</button>}</div>{newMachinePhoto&&<img className="preview" src={blobUrl(newMachinePhoto)}/>}<button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
+      <Card cls="builderCard"><h3>2. Exercise</h3><ExerciseSearchSelect exercises={exercises} value={exerciseId} onChange={(id)=>{setExerciseId(id);setSubtypeId(rememberedMachineIdForExercise(id, subtypes))}} placeholder="Search exercise..."/><details className="inlineCreate"><summary>Create new exercise here</summary><div className="builderGrid"><input placeholder="New exercise name" value={newExName} onChange={e=>setNewExName(e.target.value)}/><select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}>{muscles.map(m=><option key={m}>{m}</option>)}</select><select value={newExEquip} onChange={e=>setNewExEquip(e.target.value)}>{equipment.map(e=><option key={e}>{e}</option>)}</select></div><SecondaryMusclePicker primary={newExMuscle} value={newExSecondary} onChange={setNewExSecondary}/><button className="secondary" onClick={createExerciseAndSelect}>Create and select</button></details></Card>
+      <Card cls="builderCard"><h3>3. Machine + Sets</h3><select value={effectiveSubtypeId??''} onChange={e=>{const id=e.target.value?Number(e.target.value):undefined; setSubtypeId(id); if(exerciseId&&id) rememberMachineForExercise(exerciseId,id);}}><option value="">Optional machine/subtype</option>{subtypes.filter((s:Subtype)=>!exerciseId||s.exerciseId===exerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}</select>{rememberedSubtypeForSelected&&<p className="muted machineMemoryHint">Using last machine for this exercise: <strong>{rememberedSubtypeForSelected.name}</strong></p>}<details className="inlineCreate"><summary>Create machine for selected exercise</summary><div className="builderGrid"><input placeholder="Machine/subtype name" value={newMachineName} onChange={e=>setNewMachineName(e.target.value)}/><select value={newMachineUnit} onChange={e=>setNewMachineUnit(e.target.value as Unit)}><option value="kg">kg</option><option value="lb">lb</option></select></div><div className="singlePhotoPicker routineMachinePhoto"><label className="upload"><ImagePlus/> {newMachinePhoto ? "Change Machine Photo" : "Add Machine Photo"}<input hidden type="file" accept="image/*" onChange={e=>setNewMachinePhoto(e.target.files?.[0])}/></label>{newMachinePhoto&&<button className="secondary mini" onClick={()=>setNewMachinePhoto(undefined)}>Remove photo</button>}</div>{newMachinePhoto&&<img className="preview" src={blobUrl(newMachinePhoto)}/>}<button className="secondary" onClick={createMachineForSelected}>Create and select machine</button></details><div className="grid3"><label>Sets<input type="number" inputMode="decimal" value={setsN} onChange={e=>setSetsN(Number(e.target.value))}/></label><label>Reps<input value={reps} onChange={e=>setReps(e.target.value)}/></label><label>Rest<input type="number" inputMode="decimal" value={rest} onChange={e=>setRest(Number(e.target.value))}/></label></div><button className="primary" onClick={add}>Add to Routine</button></Card>
     </div>
     {items.length>0&&<button className="secondary mini renumberBtn" onClick={renumberRoutine}>Fix numbering</button>}
     {items.map((it:RoutineExercise)=>{const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); const st=subtypes.find((s:Subtype)=>s.id===it.subtypeId); return <Card key={it.id} cls="machine routineItemPro">{st?.photo?<img src={blobUrl(st.photo)}/>:<div className="placeholder">{it.order}</div>}<div><div className="row"><h3>{it.order}. {ex?.name}</h3><div className="iconStack reorderStack"><button className="smallAction moveAction" onClick={()=>moveRoutineItem(it,-1)}>Move up</button><button className="smallAction moveAction" onClick={()=>moveRoutineItem(it,1)}>Move down</button><button className="trash" onClick={async()=>{await db.routineExercises.delete(it.id!);refresh();}}><Trash2/></button></div></div><p className="muted">{st?.name||'No machine selected'}</p>{ex&&<MusclePills ex={ex}/>}<Pills><span>{it.sets} sets</span><span>{it.reps}</span><span>{it.rest}s</span></Pills></div></Card>})}
@@ -2281,7 +2304,9 @@ function LogPage({data}:any){
     const nextOrder = customMode || !activeWorkout?.routineId 
       ? customItems.length+1 
       : routineExercises.filter((r:RoutineExercise)=>r.routineId===activeWorkout.routineId).length+1;
-    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId:addSubtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
+    const chosenSubtypeId = addSubtypeId || rememberedMachineIdForExercise(addExerciseId, subtypes);
+    if(chosenSubtypeId) rememberMachineForExercise(addExerciseId, chosenSubtypeId);
+    const item:RoutineExercise = {id:Date.now(), routineId:activeWorkout?.routineId||0, exerciseId:addExerciseId, subtypeId:chosenSubtypeId, order:nextOrder, sets:3, reps:'8-12', rest:90, createdAt:now()};
     if(activeWorkout?.routineId && !customMode){
       await db.routineExercises.add({...item, id:undefined, routineId:activeWorkout.routineId});
       refresh();
@@ -2308,6 +2333,7 @@ function LogPage({data}:any){
       createdAt:now()
     });
 
+    rememberMachineForExercise(targetExerciseId, subtypeId as number);
     const alreadyInWorkout = items.some((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
     if(!alreadyInWorkout){
       const nextOrder = customMode || !activeWorkout?.routineId 
@@ -2325,7 +2351,11 @@ function LogPage({data}:any){
       }
     } else {
       const existingItem = items.find((it:RoutineExercise)=>it.exerciseId===targetExerciseId);
-      if(existingItem?.id) setFocusedItemId(existingItem.id);
+      if(existingItem?.id){
+        setFocusedItemId(existingItem.id);
+        if(activeWorkout?.routineId && !customMode) await db.routineExercises.update(existingItem.id,{subtypeId});
+        else setCustomItems(customItems.map((x:RoutineExercise)=>x.id===existingItem.id?{...x,subtypeId}:x));
+      }
       setAddSubtypeId(subtypeId);
     }
 
@@ -2367,11 +2397,12 @@ return <section className="workoutV15">
     <Card cls="addExercisePanel workoutVariantCreator">
       <h3>Add exercise or variant</h3>
       <p className="muted">Add exercises while training. In a saved routine, added exercises become part of the routine. In a new workout, you can choose whether to save it as a routine when you finish.</p>
-      <ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(undefined)}} placeholder="Search exercise to add..." />
-      <select value={addSubtypeId??''} onChange={e=>setAddSubtypeId(e.target.value?Number(e.target.value):undefined)}>
+      <ExerciseSearchSelect exercises={exercises} value={addExerciseId} onChange={(id)=>{setAddExerciseId(id);setAddSubtypeId(rememberedMachineIdForExercise(id, subtypes))}} placeholder="Search exercise to add..." />
+      <select value={addSubtypeId??''} onChange={e=>{const id=e.target.value?Number(e.target.value):undefined; setAddSubtypeId(id); if(addExerciseId&&id) rememberMachineForExercise(addExerciseId,id);}}>
         <option value="">Optional existing variant / machine</option>
         {subtypes.filter((s:Subtype)=>!addExerciseId||s.exerciseId===addExerciseId).map((s:Subtype)=><option key={s.id} value={s.id}>{s.name} ({s.defaultUnit})</option>)}
       </select>
+      {addExerciseId&&rememberedMachineForExercise(addExerciseId, subtypes)&&<p className="muted machineMemoryHint">Last used machine: <strong>{rememberedMachineForExercise(addExerciseId, subtypes)?.name}</strong></p>}
       <div className="grid2">
         <button className="secondary" onClick={addCustomExercise}>+ Add selected</button>
       </div>
@@ -2379,7 +2410,7 @@ return <section className="workoutV15">
     </Card>
     {items.map((it:RoutineExercise)=>{ const ex=exercises.find((e:Exercise)=>e.id===it.exerciseId); if(!ex) return null; const rep=replacements.find((r:WorkoutReplacement)=>r.workoutId===activeWorkout.id&&r.routineExerciseId===it.id);
       const actualEx=rep ? exercises.find((e:Exercise)=>e.id===rep.replacementExerciseId) || ex : ex;
-      return <Logger key={it.id} item={it} originalEx={ex} ex={actualEx} replacement={rep} allExercises={exercises} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===actualEx?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} isFocused={focusedItemId===it.id} onFocusItem={()=>setFocusedItemId(it.id)} onCompleteExercise={()=>{ const idx=items.findIndex((x:RoutineExercise)=>x.id===it.id); const next=items[idx+1]; if(next){setFocusedItemId(next.id); setTimeout(()=>document.getElementById(`logger-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),160);} }} onSave={()=>setTimer(Date.now())}/> })}
+      return <Logger key={it.id} item={it} originalEx={ex} ex={actualEx} replacement={rep} allExercises={exercises} subtypes={subtypes.filter((s:Subtype)=>s.exerciseId===actualEx?.id)} initialSubtype={subtypes.find((s:Subtype)=>s.id===it.subtypeId) || rememberedMachineForExercise(actualEx?.id, subtypes)} workout={activeWorkout} workouts={workouts} sets={sets} defaultUnit={settings.unit} refresh={refresh} isFocused={focusedItemId===it.id} onFocusItem={()=>setFocusedItemId(it.id)} onCompleteExercise={()=>{ const idx=items.findIndex((x:RoutineExercise)=>x.id===it.id); const next=items[idx+1]; if(next){setFocusedItemId(next.id); setTimeout(()=>document.getElementById(`logger-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),160);} }} onSave={()=>setTimer(Date.now())}/> })}
   </section>
 }
 
@@ -2396,9 +2427,10 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
   subtypes = Array.isArray(subtypes) ? subtypes : [];
   workouts = Array.isArray(workouts) ? workouts : [];
   sets = Array.isArray(sets) ? sets : [];
-  const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(initialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||initialSubtype;
+  const rememberedInitialSubtype = initialSubtype || rememberedMachineForExercise(ex?.id, subtypes); const [swapOpen,setSwapOpen]=useState(false); const [activeInput,setActiveInput]=useState<{set:number;field:'weight'|'reps'|'rir'}|undefined>(); const [sid,setSid]=useState<number|undefined>(rememberedInitialSubtype?.id); const subtype=subtypes.find((s:Subtype)=>s.id===sid)||rememberedInitialSubtype;
   const [unit,setUnit]=useState<Unit>(subtype?.defaultUnit||defaultUnit); const [extra,setExtra]=useState(0); const [values,setValues]=useState<Record<string,string|boolean>>({}); const [prMessage,setPrMessage]=useState(''); const [savingSet,setSavingSet]=useState<number|undefined>(); const [justCompleted,setJustCompleted]=useState(false); const [machineName,setMachineName]=useState(''); const [machineUnit,setMachineUnit]=useState<Unit>(defaultUnit); const [machinePhoto,setMachinePhoto]=useState<Blob|undefined>(); const [machineTag,setMachineTag]=useState(''); const [machineTags,setMachineTags]=useState<string[]>([]); const [machineSaved,setMachineSaved]=useState(''); const [photoModal,setPhotoModal]=useState<MachinePhotoDetails|undefined>();
-  useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid]);
+  useEffect(()=>{const remembered=initialSubtype || rememberedMachineForExercise(ex?.id, subtypes); setSid(remembered?.id);},[ex?.id, initialSubtype?.id]);
+  useEffect(()=>{const out:Record<string,string|boolean>={}; subtype?.settings?.forEach((s:MachineSetting)=>out[s.id]=s.defaultValue??(s.type==='checkbox'?false:'')); setValues(out); setUnit(subtype?.defaultUnit||defaultUnit)},[sid,subtype?.id]);
   if(missingLoggerData) return <Card cls="loggerV15"><p className="muted">This exercise could not be loaded safely.</p></Card>;
   const prev=previousSets(ex.id,subtype?.id,workout,workouts,sets);
   const todaySets=sets.filter((s:WorkoutSet)=>s.workoutId===workout.id&&s.exerciseId===ex.id&&(subtype?.id?s.subtypeId===subtype.id:true));
@@ -2439,6 +2471,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
     const saved = machineName.trim();
     const newId = await db.subtypes.add({exerciseId:ex.id,name:saved,defaultUnit:machineUnit,photo:machinePhoto,settings:[],tags:machineTags,createdAt:now()});
     setSid(newId as number);
+    rememberMachineForExercise(ex.id,newId as number);
     setMachineName('');
     setMachinePhoto(undefined);
     setMachineTag('');
@@ -2458,6 +2491,7 @@ function Logger({item,ex,originalEx,replacement,allExercises,subtypes,initialSub
       if(!r){ alert('Enter reps'); return; }
       const existing=todaySets.find((s:WorkoutSet)=>s.setNumber===n);
       const newRecord: WorkoutSet = {workoutId:workout.id,exerciseId:ex.id,subtypeId:subtype?.id,setNumber:n,weight:Number(w||0),reps:Number(r),unit,rir:rir?Number(rir):undefined,completed:true,settingValues:values,createdAt:existing?.createdAt||now()};
+      if(subtype?.id) rememberMachineForExercise(ex.id,subtype.id);
       let id=existing?.id;
       if(existing?.id) await db.sets.update(existing.id,newRecord);
       else id = await db.sets.add(newRecord);
@@ -2953,28 +2987,18 @@ function SettingsPage({data}:any){const {settings,refresh}=data;
     <Card cls="timezoneCard"><h3>Timezone</h3><p><strong>{localTimeZone()}</strong></p><p className="muted">LiftLog now uses your device timezone for today, calendar scheduling, nutrition logs, recovery and weekly stats.</p></Card>
     <Card><h3>Default display unit</h3><select value={settings.unit} onChange={async e=>{await db.settings.put({...settings,unit:e.target.value as Unit});refresh()}}><option value="kg">kg</option><option value="lb">lb</option></select><p className="muted">Machine subtypes still keep their own default units.</p></Card>
     <Card><h3>Theme</h3><button className="secondary" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'});refresh()}}>{settings.theme==='light'?<Moon/>:<Sun/>} Toggle theme</button></Card>
-    <Card cls="photoSafeBackupCard"><h3>Photo-safe backup</h3><p className="muted">Exports routines, workouts, machines, tags and machine photos as restorable JSON. Use this before changing phones, browsers or after big app edits.</p><button className="secondary" onClick={exportData}>Export Photo-Safe JSON</button><label className="upload">Import Photo-Safe JSON<input hidden type="file" accept="application/json" onChange={e=>importData(e.target.files?.[0])}/></label><button className="danger" onClick={clear}>Delete all local data</button></Card>
+    <Card cls="photoSafeBackupCard"><h3>Photo-safe backup</h3><p className="muted">This uses the same photo-safe format as the Backups page. Backups is now the main place to export/import/restore.</p><button className="secondary" onClick={exportData}>Export Photo-Safe JSON</button><label className="upload">Import Photo-Safe JSON<input hidden type="file" accept="application/json" onChange={e=>importData(e.target.files?.[0])}/></label><button className="danger" onClick={clear}>Delete all local data</button></Card>
   </section>
 }
 
 
 async function buildLocalBackupPayload() {
-  return {
-    app: 'LiftLog',
-    version: 11,
-    exportedAt: new Date().toISOString(),
-    settings: await db.settings.toArray(),
-    exercises: await db.exercises.toArray(),
-    subtypes: await db.subtypes.toArray(),
-    routines: await db.routines.toArray(),
-    routineExercises: await db.routineExercises.toArray(),
-    workouts: await db.workouts.toArray(),
-    sets: await db.sets.toArray()
-  };
+  // v57: the visible Backups page now uses the same photo-safe format as Settings.
+  return await buildPhotoSafeBackupPayload();
 }
 
 async function createBackupSnapshot(reason = 'Manual backup') {
-  const payload = await buildLocalBackupPayload();
+  const payload = await buildPhotoSafeBackupPayload();
   const stamp = new Date().toLocaleString();
   await db.backups.add({
     name: `LiftLog backup - ${stamp}`,
@@ -3001,14 +3025,18 @@ async function restoreFromPayload(payload:any) {
   await db.routineExercises.clear();
   await db.workouts.clear();
   await db.sets.clear();
+  try{ await db.plannedWorkouts.clear(); }catch{}
+  try{ await db.replacements.clear(); }catch{}
   if (payload.settings?.length) await db.settings.bulkPut(payload.settings);
   else await db.settings.put({id:'settings', unit:'kg', theme:'light'});
   if (payload.exercises?.length) await db.exercises.bulkPut(payload.exercises);
-  if (payload.subtypes?.length) await db.subtypes.bulkPut(payload.subtypes);
+  if (payload.subtypes?.length) await db.subtypes.bulkPut(payload.subtypes.map((s:any)=>decodeSubtypeFromBackup(s)));
   if (payload.routines?.length) await db.routines.bulkPut(payload.routines);
   if (payload.routineExercises?.length) await db.routineExercises.bulkPut(payload.routineExercises);
   if (payload.workouts?.length) await db.workouts.bulkPut(payload.workouts);
   if (payload.sets?.length) await db.sets.bulkPut(payload.sets);
+  if (payload.plannedWorkouts?.length) await db.plannedWorkouts.bulkPut(payload.plannedWorkouts);
+  if (payload.replacements?.length) await db.replacements.bulkPut(payload.replacements);
 }
 
 function downloadJson(payload:any, filename:string) {
@@ -3021,7 +3049,7 @@ function downloadJson(payload:any, filename:string) {
 function backupFilename() {
   const d = new Date();
   const pad = (n:number) => String(n).padStart(2, '0');
-  return `LiftLog_Backup_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}.json`;
+  return `LiftLog_PhotoSafe_Backup_${today()}_${pad(d.getHours())}-${pad(d.getMinutes())}.json`;
 }
 
 function BackupPage({data}:any){
@@ -3038,9 +3066,9 @@ function BackupPage({data}:any){
   async function exportBackup(){
     const payload = await buildLocalBackupPayload();
     downloadJson(payload, backupFilename());
-    await createBackupSnapshot('Exported JSON backup');
+    await createBackupSnapshot('Exported photo-safe JSON backup');
     await loadBackups();
-    setStatus('Backup exported and local restore point created.');
+    setStatus('Photo-safe backup exported and local restore point created.');
   }
 
   async function manualSnapshot(){
@@ -3051,15 +3079,15 @@ function BackupPage({data}:any){
 
   async function importBackup(file: File | undefined){
     if(!file) return;
-    if(!confirm('Import this JSON backup? This will replace the current local LiftLog data on this device.')) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if(!confirm(backupSummary(payload))) return;
     try{
-      await createBackupSnapshot('Before JSON import');
-      const text = await file.text();
-      const payload = JSON.parse(text);
+      await createBackupSnapshot('Before photo-safe JSON import');
       await restoreFromPayload(payload);
       refresh();
       await loadBackups();
-      setStatus('Import complete. Current device now uses the imported backup.');
+      setStatus('Import complete. Photo-safe backup restored to this device.');
     }catch(err:any){
       setStatus('Import failed: ' + (err.message || String(err)));
     }
@@ -3086,12 +3114,12 @@ function BackupPage({data}:any){
   }
 
   return <section>
-    <Card cls="hero"><h2>Local Backups</h2><p>Export JSON files, import backups, and keep the last 20 in-browser restore points. No Supabase required.</p></Card>
+    <Card cls="hero"><h2>Photo-Safe Backups</h2><p>Export/import routines, workouts, machines, tags and machine photos. This is the main backup system to use. No Supabase required.</p></Card>
 
     <Card>
       <h3>Backup actions</h3>
-      <button className="primary" onClick={exportBackup}>Export JSON Backup</button>
-      <label className="upload">Import JSON Backup<input hidden type="file" accept="application/json" onChange={e=>importBackup(e.target.files?.[0])}/></label>
+      <button className="primary" onClick={exportBackup}>Export Photo-Safe JSON</button>
+      <label className="upload">Import Photo-Safe JSON<input hidden type="file" accept="application/json" onChange={e=>importBackup(e.target.files?.[0])}/></label>
       <button className="secondary" onClick={manualSnapshot}>Create restore point</button>
       <p className="muted">Tip: save exported JSON files to iCloud Drive, Google Drive, OneDrive or email them to yourself.</p>
       {status && <div className="backupStatus">{status}</div>}
@@ -3099,7 +3127,7 @@ function BackupPage({data}:any){
 
     <Card>
       <h3>Local restore points</h3>
-      <p className="muted">LiftLog keeps up to 20 restore points in this browser. These do not transfer to other devices unless exported as JSON.</p>
+      <p className="muted">LiftLog keeps up to 20 restore points in this browser. Restore points now use the same photo-safe format, but they do not transfer to other devices unless exported as JSON.</p>
       {backups.length ? backups.map(b=><div className="backupRow" key={b.id}>
         <div>
           <strong>{b.name}</strong>
@@ -3116,9 +3144,9 @@ function BackupPage({data}:any){
     <Card>
       <h3>Simple device transfer</h3>
       <ol className="steps">
-        <li>On your main device, press <strong>Export JSON Backup</strong>.</li>
+        <li>On your main device, press <strong>Export Photo-Safe JSON</strong>.</li>
         <li>Send the file to your other device using AirDrop, iCloud Drive, email, Google Drive or OneDrive.</li>
-        <li>On the other device, press <strong>Import JSON Backup</strong>.</li>
+        <li>On the other device, press <strong>Import Photo-Safe JSON</strong>.</li>
       </ol>
     </Card>
   </section>

@@ -2955,3 +2955,32 @@ body[data-theme="dark"] .favouriteRoutinePanel{
     width:100%;
   }
 }
+
+
+/* LiftLog v57 Unified Photo-Safe Backups */
+.backupHeroNote{
+  font-weight:900;
+}
+
+
+/* LiftLog v58 Remember Last Machine */
+.machineMemoryHint{
+  margin:6px 0 10px;
+  padding:8px 10px;
+  border-radius:14px;
+  background:#eff6ff;
+  border:1px solid #bfdbfe;
+  color:#1e3a8a!important;
+  font-weight:850;
+}
+.machineMemoryHint strong{
+  color:#1d4ed8;
+}
+body[data-theme="dark"] .machineMemoryHint{
+  background:#020617;
+  border-color:#1e3a8a;
+  color:#bfdbfe!important;
+}
+body[data-theme="dark"] .machineMemoryHint strong{
+  color:#93c5fd;
+}
