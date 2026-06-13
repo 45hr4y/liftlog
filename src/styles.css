@@ -2899,3 +2899,23 @@ body[data-theme="dark"] .editableTagList button{
     font-size:22px;
   }
 }
+
+
+/* LiftLog v54 Local Timezone Fix */
+.timezoneCard strong{
+  font-size:18px;
+}
+.timezoneCard p{
+  margin:6px 0;
+}
+
+
+/* LiftLog v55 Photo-Safe Backups */
+.photoSafeBackupCard{
+  border:1px solid #bbf7d0;
+  background:linear-gradient(135deg,#f0fdf4,#ffffff);
+}
+body[data-theme="dark"] .photoSafeBackupCard{
+  background:#020617;
+  border-color:#166534;
+}

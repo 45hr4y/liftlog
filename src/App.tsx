@@ -12,7 +12,7 @@ function emergencyExportLocalData(){
     }
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
-    a.download=`LiftLog_Emergency_Backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.download=`LiftLog_Emergency_Backup_${today()}.json`;
     a.click();
   }catch(err){ alert('Emergency backup failed. Try the Backup page after reloading.'); }
 }
@@ -48,6 +48,86 @@ async function compressImageFile(file?:File|Blob, maxSize=800, quality=0.65):Pro
   }catch{
     return file as Blob;
   }
+}
+
+
+function isBlobLikePhoto(x:any): x is Blob {
+  return !!x && typeof x === 'object' && typeof x.arrayBuffer === 'function' && typeof x.type === 'string';
+}
+function dataUrlToBlob(dataUrl:string):Blob|undefined{
+  try{
+    if(!dataUrl.startsWith('data:')) return undefined;
+    const [meta,b64]=dataUrl.split(',');
+    const mime=(meta.match(/data:(.*?);base64/)?.[1]) || 'image/webp';
+    const bin=atob(b64 || '');
+    const arr=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+    return new Blob([arr],{type:mime});
+  }catch{
+    return undefined;
+  }
+}
+async function blobToDataUrl(blob?:Blob):Promise<string|undefined>{
+  if(!isBlobLikePhoto(blob)) return undefined;
+  return await new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(typeof reader.result==='string'?reader.result:undefined);
+    reader.onerror=()=>resolve(undefined);
+    reader.readAsDataURL(blob);
+  });
+}
+async function encodeSubtypeForBackup(s:Subtype){
+  const photoDataUrl = await blobToDataUrl(s.photo);
+  const clean:any = {...s};
+  delete clean.photo;
+  if(photoDataUrl) clean.photoDataUrl = photoDataUrl;
+  return clean;
+}
+function decodeSubtypeFromBackup(s:any){
+  const clean:any = {...s};
+  if(typeof clean.photoDataUrl==='string'){
+    clean.photo = dataUrlToBlob(clean.photoDataUrl);
+  } else if(clean.photo && !isBlobLikePhoto(clean.photo)) {
+    clean.photo = undefined;
+  }
+  delete clean.photoDataUrl;
+  return clean;
+}
+async function buildPhotoSafeBackupPayload(){
+  const subtypesRaw = await db.subtypes.toArray();
+  const subtypes = await Promise.all(subtypesRaw.map(encodeSubtypeForBackup));
+  return {
+    version:55,
+    exportedAt:now(),
+    exportedDate:today(),
+    timezone:localTimeZone(),
+    app:'LiftLog',
+    photoSafe:true,
+    counts:{
+      settings:(await db.settings.count()),
+      exercises:(await db.exercises.count()),
+      subtypes:subtypesRaw.length,
+      photos:subtypes.filter((s:any)=>!!s.photoDataUrl).length,
+      routines:(await db.routines.count()),
+      routineExercises:(await db.routineExercises.count()),
+      workouts:(await db.workouts.count()),
+      sets:(await db.sets.count())
+    },
+    settings:await db.settings.toArray(),
+    exercises:await db.exercises.toArray(),
+    subtypes,
+    routines:await db.routines.toArray(),
+    routineExercises:await db.routineExercises.toArray(),
+    workouts:await db.workouts.toArray(),
+    sets:await db.sets.toArray(),
+    plannedWorkouts:await db.plannedWorkouts.toArray(),
+    replacements:await db.replacements.toArray()
+  };
+}
+function backupSummary(payload:any){
+  const c=payload?.counts || {};
+  const photos = c.photos ?? (payload?.subtypes||[]).filter((s:any)=>typeof s.photoDataUrl==='string').length;
+  return `LiftLog backup ${payload?.version?`v${payload.version}`:'legacy'}\nExported: ${payload?.exportedAt || 'Unknown'}\nTimezone: ${payload?.timezone || 'Unknown'}\nExercises: ${c.exercises ?? payload?.exercises?.length ?? 0}\nMachines: ${c.subtypes ?? payload?.subtypes?.length ?? 0}\nPhotos: ${photos}\nWorkouts: ${c.workouts ?? payload?.workouts?.length ?? 0}\nSets: ${c.sets ?? payload?.sets?.length ?? 0}\n\nImport this backup?`;
 }
 
 function haptic(pattern:number|number[]=8){ try{ navigator.vibrate?.(pattern); }catch{} }
@@ -100,7 +180,28 @@ class LiftDB extends Dexie {
 const db = new LiftDB();
 
 const now = () => new Date().toISOString();
-const today = () => new Date().toISOString().slice(0,10);
+const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Australia/Sydney';
+function dateKeyLocal(input: Date | string | number = new Date()){
+  const d = input instanceof Date ? input : new Date(input);
+  return new Intl.DateTimeFormat('en-CA',{timeZone:localTimeZone(),year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+}
+function localDateFromKey(key:string){
+  const [y,m,d]=key.split('-').map(Number);
+  return new Date(y,(m||1)-1,d||1,12,0,0,0);
+}
+function addDaysLocal(key:string, days:number){
+  const d=localDateFromKey(key);
+  d.setDate(d.getDate()+days);
+  return dateKeyLocal(d);
+}
+function mondayKeyLocal(input:Date|string = new Date()){
+  const d = typeof input==='string'?localDateFromKey(input):new Date(input);
+  const day=d.getDay();
+  const diff=(day===0?-6:1-day);
+  d.setDate(d.getDate()+diff);
+  return dateKeyLocal(d);
+}
+const today = () => dateKeyLocal();
 const blobUrl = (b?: Blob) => b ? URL.createObjectURL(b) : undefined;
 type MachinePhotoDetails = {title:string; subtitle?:string; photo?:Blob; tags?:string[]; last?:WorkoutSet; best?:WorkoutSet};
 
@@ -164,7 +265,7 @@ function bucketForMuscle(muscle: string) {
 function weeklyWorkoutSets(workouts: Workout[], sets: WorkoutSet[]) {
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-  const week = weekStart.toISOString().slice(0,10);
+  const week = dateKeyLocal(weekStart);
   const weekWorkouts = workouts.filter(w => w.date >= week);
   return sets.filter(s => weekWorkouts.some(w => w.id === s.workoutId));
 }
@@ -1248,9 +1349,7 @@ function Pills({children}:any){return <div className="pills">{children}</div>}
 
 
 function workoutsThisWeek(workouts: Workout[]) {
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-  const week = weekStart.toISOString().slice(0,10);
+  const week = mondayKeyLocal();
   return workouts.filter(w => w.date >= week);
 }
 
@@ -1568,7 +1667,7 @@ function HomePage({data}:any){
   const recoveryMuscles = useMemo(()=>['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'],[]);
   const favouriteRoutine = routines.find((r:any)=>r.favourite || r.favorite || r.pinned) || suggestedRoutine;
   const quickRoutine = scheduledRoutine || favouriteRoutine;
-  const weekNutrition = useMemo(()=>{const nutritionLogsHome = loadNutritionLogs(); return Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=d.toISOString().slice(0,10); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});},[]);
+  const weekNutrition = useMemo(()=>{const nutritionLogsHome = loadNutritionLogs(); return Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=dateKeyLocal(d); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});},[]);
   const waterGoalDaysHome = useMemo(()=>weekNutrition.filter(n=>n.waterMl>=2000).length,[weekNutrition]);
   const proteinGoalDaysHome = useMemo(()=>weekNutrition.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length,[weekNutrition]);
   const recoveryScoresHome = useMemo(()=>recoveryMuscles.map(m=>({m,rec:recoveryForMuscleFromHistory(m,exercises,workouts,sets)})),[recoveryMuscles,exercises,workouts,sets]);
@@ -2029,7 +2128,7 @@ function addDays(date: Date, days: number) {
   return d;
 }
 function dateKey(date: Date) {
-  return date.toISOString().slice(0,10);
+  return dateKeyLocal(date);
 }
 
 
@@ -2450,8 +2549,7 @@ function CalendarPage({data}:any){
   }
   async function movePlan(p:PlannedWorkout, days:number){
     if(!p.id) return;
-    const d = new Date(p.date); d.setDate(d.getDate()+days);
-    await db.plannedWorkouts.update(p.id,{date:d.toISOString().slice(0,10)});
+    await db.plannedWorkouts.update(p.id,{date:addDaysLocal(p.date,days)});
     refresh();
   }
   async function deleteCompletedWorkout(w:Workout){
@@ -2617,7 +2715,7 @@ type MealLog = { id:string; date:string; time:string; type:MealType; title:strin
 type DailyNutritionLog = { date:string; waterMl:number; creatineTaken:boolean; creatineGrams:number; caffeineMg:number; caffeineLastAt?:string; proteinServings?:number; proteinTarget?:number; meals:MealLog[]; reflection?:string };
 
 const NUTRITION_STORAGE_KEY = 'liftlog-nutrition-accountability-v1';
-const nutritionToday = () => new Date().toISOString().slice(0,10);
+const nutritionToday = () => today();
 const nutritionUid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now()+Math.random()));
 
 function emptyNutritionDay(date:string): DailyNutritionLog {
@@ -2707,8 +2805,8 @@ function NutritionPage(){
   const fruitVegMet = day.meals.some(m=>m.fruitVegIncluded);
   const consistencyMet = day.meals.length >= 3;
   const lateSnackFlag = day.meals.some(m=>m.type==='Snack' && /late|night|after dinner|midnight/i.test(`${m.title} ${m.notes||''}`));
-  const weekStats=Array.from({length:7}).map((_,i)=>{const d=new Date(date); d.setDate(d.getDate()-(6-i)); const key=d.toISOString().slice(0,10); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
-  const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=d.toISOString().slice(0,10); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
+  const weekStats=Array.from({length:7}).map((_,i)=>{const d=localDateFromKey(date); d.setDate(d.getDate()-(6-i)); const key=dateKeyLocal(d); const entry=normaliseNutritionDay(logs[key]||emptyNutritionDay(key)); const points=(entry.waterMl>=1800?1:0)+(entry.creatineTaken?1:0)+(entry.meals.length>=3?1:0)+((entry.proteinServings||0)>=(entry.proteinTarget||3)?1:0); return {date:key,points,meals:entry.meals.length,waterMl:entry.waterMl};});
+  const creatineStreak=(()=>{let streak=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const key=dateKeyLocal(d); if(normaliseNutritionDay(logs[key]||emptyNutritionDay(key)).creatineTaken) streak++; else if(i>0) break;} return streak;})();
   const nextSuggestion=score>=90?'Strong day. Repeat the basics tomorrow.':day.waterMl<2000?'Drink 500 ml water next.':protein<proteinTarget?'Add one protein serving.':day.meals.length<3?'Log your next meal.':!(day.reflection||'').trim()?'Write a quick reflection.':'You are on track.';
   function exportBackup(){downloadNutritionJson(logs, `LiftLog_Nutrition_Backup_${nutritionToday()}.json`);}
   async function importBackup(file?:File){if(!file)return; const parsed=JSON.parse(await file.text()); setLogs(parsed); saveNutritionLogs(parsed);}
@@ -2816,28 +2914,37 @@ function MorePage({data}:any){
 
 function SettingsPage({data}:any){const {settings,refresh}=data; 
   async function exportData(){
-    const payload={settings:await db.settings.toArray(),exercises:await db.exercises.toArray(),subtypes:await db.subtypes.toArray(),routines:await db.routines.toArray(),routineExercises:await db.routineExercises.toArray(),workouts:await db.workouts.toArray(),sets:await db.sets.toArray()}; 
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})); a.download='liftlog-v9-export.json'; a.click()
+    const payload = await buildPhotoSafeBackupPayload();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+    a.download=`LiftLog_PhotoSafe_Backup_${today()}.json`;
+    a.click();
+    try{ localStorage.setItem('liftlog-last-backup', now()); }catch{}
   } 
   async function importData(file: File | undefined){
     if(!file) return;
-    if(!confirm('Importing will add records from the JSON backup into this browser. Continue?')) return;
     const text = await file.text();
     const payload = JSON.parse(text);
+    if(!confirm(backupSummary(payload))) return;
+    if(payload.settings) await db.settings.bulkPut(payload.settings.map((x:any)=>({...x})));
     if(payload.exercises) await db.exercises.bulkAdd(payload.exercises.map((x:any)=>({...x,id:undefined})));
-    if(payload.subtypes) await db.subtypes.bulkAdd(payload.subtypes.map((x:any)=>({...x,id:undefined})));
+    if(payload.subtypes) await db.subtypes.bulkAdd(payload.subtypes.map((x:any)=>({...decodeSubtypeFromBackup(x),id:undefined})));
     if(payload.routines) await db.routines.bulkAdd(payload.routines.map((x:any)=>({...x,id:undefined})));
     if(payload.routineExercises) await db.routineExercises.bulkAdd(payload.routineExercises.map((x:any)=>({...x,id:undefined})));
     if(payload.workouts) await db.workouts.bulkAdd(payload.workouts.map((x:any)=>({...x,id:undefined})));
     if(payload.sets) await db.sets.bulkAdd(payload.sets.map((x:any)=>({...x,id:undefined})));
+    if(payload.plannedWorkouts) await db.plannedWorkouts.bulkAdd(payload.plannedWorkouts.map((x:any)=>({...x,id:undefined})));
+    if(payload.replacements) await db.replacements.bulkAdd(payload.replacements.map((x:any)=>({...x,id:undefined})));
     refresh();
-    alert('Import complete. Some links may need review if imported across different versions.');
+    const photoCount=(payload.subtypes||[]).filter((s:any)=>typeof s.photoDataUrl==='string').length;
+    alert(`Import complete. Restored ${photoCount} machine photos from this backup.`);
   }
   async function clear(){if(!confirm('Delete all local LiftLog data? Export first if you want a backup.'))return; await db.delete(); location.reload()} 
   return <section>
+    <Card cls="timezoneCard"><h3>Timezone</h3><p><strong>{localTimeZone()}</strong></p><p className="muted">LiftLog now uses your device timezone for today, calendar scheduling, nutrition logs, recovery and weekly stats.</p></Card>
     <Card><h3>Default display unit</h3><select value={settings.unit} onChange={async e=>{await db.settings.put({...settings,unit:e.target.value as Unit});refresh()}}><option value="kg">kg</option><option value="lb">lb</option></select><p className="muted">Machine subtypes still keep their own default units.</p></Card>
     <Card><h3>Theme</h3><button className="secondary" onClick={async()=>{await db.settings.put({...settings,theme:settings.theme==='light'?'dark':'light'});refresh()}}>{settings.theme==='light'?<Moon/>:<Sun/>} Toggle theme</button></Card>
-    <Card><h3>Local backup</h3><button className="secondary" onClick={exportData}>Export JSON Backup</button><label className="upload">Import JSON Backup<input hidden type="file" accept="application/json" onChange={e=>importData(e.target.files?.[0])}/></label><button className="danger" onClick={clear}>Delete all local data</button></Card>
+    <Card cls="photoSafeBackupCard"><h3>Photo-safe backup</h3><p className="muted">Exports machines, tags and machine photos as restorable JSON. Use this before changing phones or browsers.</p><button className="secondary" onClick={exportData}>Export Photo-Safe JSON</button><label className="upload">Import Photo-Safe JSON<input hidden type="file" accept="application/json" onChange={e=>importData(e.target.files?.[0])}/></label><button className="danger" onClick={clear}>Delete all local data</button></Card>
   </section>
 }
 
@@ -3090,7 +3197,7 @@ function HistoryPage({data}:any){
   const allDayKeys = useMemo(()=>Array.from(new Set([...completed.map((w:Workout)=>w.date), ...Object.keys(nutritionLogs), ...plannedWorkouts.map((p:PlannedWorkout)=>p.date)])).sort((a,b)=>b.localeCompare(a)),[completed,nutritionLogs,plannedWorkouts]);
   const dayKeys = useMemo(()=>allDayKeys.slice(0,visibleDays),[allDayKeys,visibleDays]);
   const recentCutoff = useMemo(()=>Date.now()-7*86400000,[]);
-  const recentDate = (d:string)=>new Date(d).getTime()>=recentCutoff;
+  const recentDate = (d:string)=>localDateFromKey(d).getTime()>=recentCutoff;
   const workouts7 = useMemo(()=>completed.filter((w:Workout)=>recentDate(w.date)),[completed,recentCutoff]);
   const totalVol7 = useMemo(()=>workouts7.reduce((a,w)=>a+workoutVolume(w,sets),0),[workouts7,sets]);
   const nutritionEntries7 = useMemo(()=>Object.entries(nutritionLogs).filter(([d])=>recentDate(d)).map(([d,n])=>normaliseNutritionDay(n)),[nutritionLogs,recentCutoff]);
