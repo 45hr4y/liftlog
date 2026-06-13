@@ -2838,3 +2838,64 @@ body[data-theme="dark"] .editableTagList button{
   margin:14px 0 90px;
   min-height:44px;
 }
+
+
+/* LiftLog v53 Mobile Machine Modal + Home CTA Polish */
+@media(max-width:720px){
+  .workoutMachineCard{
+    grid-template-columns:72px 1fr!important;
+    padding:10px!important;
+    gap:10px!important;
+    border-radius:18px!important;
+  }
+  .workoutMachineCard img,
+  .workoutMachineCard .placeholder{
+    width:72px!important;
+    height:72px!important;
+    border-radius:14px!important;
+  }
+  .workoutMachineCard strong{
+    font-size:15px!important;
+  }
+  .workoutMachineCard em{
+    font-size:11px!important;
+  }
+  .workoutMachineCard .pills{
+    margin-top:5px;
+    max-height:32px;
+    overflow:hidden;
+  }
+  .machineModalBackdrop{
+    align-items:end!important;
+    place-items:end center!important;
+    padding:8px!important;
+  }
+  .machineModal{
+    width:100%!important;
+    max-height:86vh!important;
+    border-radius:24px 24px 18px 18px!important;
+    padding:12px!important;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom))!important;
+  }
+  .machineModalTop{
+    position:sticky;
+    top:0;
+    z-index:3;
+    background:inherit;
+    padding-bottom:8px;
+  }
+  .machineModalTop .iconBtn{
+    width:48px!important;
+    height:48px!important;
+    font-size:28px!important;
+  }
+  .machineModalPhoto{
+    max-height:46vh!important;
+  }
+  .machineModalInfo{
+    grid-template-columns:1fr!important;
+  }
+  .continueRoutineCard h3{
+    font-size:22px;
+  }
+}

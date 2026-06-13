@@ -1566,7 +1566,8 @@ function HomePage({data}:any){
   const prs = useMemo(()=>homePanel==='prs'||homePanel==='overview'?recentPRItems(exercises, sets):[],[homePanel,exercises,sets]);
   const recommended = useMemo(()=>recommendedTrainingFromRecovery(exercises,routines,routineExercises,workouts,sets),[exercises,routines,routineExercises,workouts,sets]);
   const recoveryMuscles = useMemo(()=>['Chest','Traps','Upper Back','Lats','Erectors','Front Delt','Side Delt','Rear Delt','Abs','Obliques','Quadriceps','Hamstrings','Adductors','Abductors','Glutes','Calves','Biceps','Triceps','Forearms'],[]);
-  const lastRoutine = lastWorkout?.routineId ? routines.find((r:Routine)=>r.id===lastWorkout.routineId) : suggestedRoutine;
+  const favouriteRoutine = routines.find((r:any)=>r.favourite || r.favorite || r.pinned) || suggestedRoutine;
+  const quickRoutine = scheduledRoutine || favouriteRoutine;
   const weekNutrition = useMemo(()=>{const nutritionLogsHome = loadNutritionLogs(); return Array.from({length:7}).map((_,i)=>{const d=new Date(); d.setDate(d.getDate()-i); const key=d.toISOString().slice(0,10); return normaliseNutritionDay(nutritionLogsHome[key]||emptyNutritionDay(key));});},[]);
   const waterGoalDaysHome = useMemo(()=>weekNutrition.filter(n=>n.waterMl>=2000).length,[weekNutrition]);
   const proteinGoalDaysHome = useMemo(()=>weekNutrition.filter(n=>(n.proteinServings||0)>=(n.proteinTarget||3)).length,[weekNutrition]);
@@ -1581,19 +1582,19 @@ function HomePage({data}:any){
         <div>
           <div className="eyebrow lightText">TODAY</div>
           <h2>{suggestedRoutine ? suggestedRoutine.name : 'Ready to train?'}</h2>
-          <p>{scheduledRoutine ? `Scheduled today · tap Start to begin ${scheduledRoutine.name}` : (lastWorkout ? `Last workout: ${lastWorkout.title} on ${lastWorkout.date}` : 'Build a routine and start your first session.')}</p>
+          <p>{scheduledRoutine ? `Scheduled today · starts ${scheduledRoutine.name} immediately.` : (quickRoutine ? `Quick start ${quickRoutine.name}, or choose another workout.` : 'Create or choose a routine to begin.')}</p>
         </div>
         <div className="heroBadge">🔥</div>
       </div>
-      <button className="primary glowBtn" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? `Start today\'s ${scheduledRoutine?.name || 'workout'}` : 'Choose / Start Workout'}</button>
+      <button className="primary glowBtn" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : (quickRoutine?.id ? startRoutineWorkout(quickRoutine.id, today()) : setPage('log'))}>{todayPlan?.routineId ? `Start scheduled ${scheduledRoutine?.name || 'workout'}` : (quickRoutine?.name ? `Start ${quickRoutine.name}` : 'Choose Workout')}</button>
     </Card>
 
     <div className="homeWeeklyCards">
       <Card cls="continueRoutineCard">
-        <span className="eyebrow">QUICK START ROUTINE</span>
-        <h3>{lastRoutine?.name || 'Start training'}</h3>
-        <p className="muted">{todayPlan?.routineId ? 'Same scheduled workout shortcut as above.' : (lastWorkout ? `Last completed ${lastWorkout.date}` : 'Start your suggested routine quickly.')}</p>
-        <button className="primary" onClick={()=>todayPlan?.routineId ? startRoutineWorkout(todayPlan.routineId, today()) : setPage('log')}>{todayPlan?.routineId ? 'Start Today\'s Plan' : 'Open Workout'}</button>
+        <span className="eyebrow">FAST START</span>
+        <h3>{quickRoutine?.name || 'Choose workout'}</h3>
+        <p className="muted">{scheduledRoutine ? 'Scheduled for today.' : 'Starts your favourite/suggested routine in one tap.'}</p>
+        <button className="primary" onClick={()=>quickRoutine?.id ? startRoutineWorkout(quickRoutine.id, today()) : setPage('log')}>{scheduledRoutine ? 'Start Scheduled Routine' : (quickRoutine?.name ? 'Start Routine' : 'Choose Workout')}</button>
       </Card>
       <Card cls="recoveryInsightCard">
         <span className="eyebrow">RECOVERY INSIGHTS</span>
