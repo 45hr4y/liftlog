@@ -3180,6 +3180,8 @@ function HistoryPage({data}:any){
         </Card>
       }) : <EmptyState title="No history yet" body="Start your first workout or log nutrition to build your timeline." action={undefined} />}
     </div>
+  
+    {dayKeys.length < allDayKeys.length && <button className="secondary loadMoreHistory" onClick={()=>setVisibleDays(v=>v+18)}>Load more history</button>}
   </section>
 }
 
@@ -3221,8 +3223,6 @@ class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasErro
               <small>{String(this.state.error?.message || this.state.error || 'Unknown error')}</small>
             </div>
           
-    {dayKeys.length < allDayKeys.length && <button className="secondary loadMoreHistory" onClick={()=>setVisibleDays(v=>v+18)}>Load more history</button>}
-  </section>
         </main>
       </div>;
     }
