@@ -3223,6 +3223,7 @@ class LiftLogErrorBoundary extends Component<{children:React.ReactNode},{hasErro
               <small>{String(this.state.error?.message || this.state.error || 'Unknown error')}</small>
             </div>
           
+          </section>
         </main>
       </div>;
     }
